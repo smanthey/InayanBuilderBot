@@ -186,6 +186,43 @@ test("pipeline run includes builtin advanced indexing when enabled", async () =>
   server.close();
 });
 
+test("magic run includes Playwright-oriented E2E execution tasks", async () => {
+  const app = createApp();
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once("listening", resolve));
+
+  const address = server.address();
+  const port = typeof address === "object" && address ? address.port : 0;
+
+  const response = await fetch(`http://127.0.0.1:${port}/api/v1/masterpiece/magic-run`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      productName: "E2E Coverage Validation",
+      userGoal: "Ensure execution plan includes Playwright tasks",
+      stack: ["Node.js", "Express", "React"],
+      constraints: {
+        budgetUsd: 300,
+        deadlineDays: 3,
+        teamSize: 1,
+      },
+      timeoutTier: "fast",
+      deterministic: true,
+    }),
+  });
+
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.ok, true);
+
+  const tasks = Array.isArray(body.executionBridge?.tasks) ? body.executionBridge.tasks : [];
+  const e2eTasks = tasks.filter((t) => /playwright|e2e/i.test(String(t?.title || "")));
+  assert.equal(e2eTasks.length >= 1, true);
+  assert.equal(e2eTasks.some((t) => (t.acceptance_criteria || []).some((c) => /planhash|qualityscore|timetofirstwowms/i.test(String(c)))), true);
+
+  server.close();
+});
+
 test("reddit search endpoint returns ranked results", async () => {
   const originalFetch = global.fetch;
   global.fetch = async (url, options = {}) => {
