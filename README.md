@@ -26,6 +26,8 @@ This is a robust, working system, not a lite demo. It includes:
 - `POST /api/v1/indexing/sync`
 - `POST /api/v1/indexing/readiness`
 - `POST /api/v1/indexing/dashboard-scout`
+- `GET /api/v1/github/capabilities`
+- `POST /api/v1/github/research`
 - `GET /api/v1/reddit/capabilities`
 - `POST /api/v1/reddit/search`
 - `POST /api/v1/chat/reply`
@@ -52,8 +54,9 @@ This is a robust, working system, not a lite demo. It includes:
    - `repo:readiness:pulse`
    - `dashboard:repo:scout`
 5. Produce a final build blueprint based on selected top repos
-6. Run built-in Reddit research stage (fallback chain + ranked signals)
-7. Persist artifacts to `.data/runs.json`
+6. Run built-in GitHub research stage (repo + issue/code-answer intelligence)
+7. Run built-in Reddit research stage (fallback chain + ranked signals)
+8. Persist artifacts to `.data/runs.json`
 
 ## Install
 
@@ -121,6 +124,20 @@ Example request:
   "maxResults": 60
 }
 ```
+
+## GitHub Research Intelligence
+
+The system now includes GitHub-native research for implementation answers and reusable code patterns:
+
+- repo discovery (`/search/repositories`)
+- issue/forum-style answer discovery (`/search/issues`)
+- code-fence snippet extraction from issue bodies
+- pipeline integration (`github_research` stage in `/api/v1/masterpiece/pipeline/run`)
+
+Endpoints:
+
+- `GET /api/v1/github/capabilities`
+- `POST /api/v1/github/research`
 
 ## Live AI Chat
 

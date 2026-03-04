@@ -2,6 +2,19 @@
 
 ## 2026-03-04
 
+### GitHub + Reddit Intelligence Fully Included
+
+- Added built-in GitHub research system:
+  - repo search intelligence (`/search/repositories`)
+  - issue/forum answer intelligence (`/search/issues`)
+  - code snippet extraction from fenced markdown blocks
+- Added endpoints:
+  - `GET /api/v1/github/capabilities`
+  - `POST /api/v1/github/research`
+- Added pipeline integration:
+  - `runGithubResearch` toggle (default `true`) in `/api/v1/masterpiece/pipeline/run`
+  - `github_research` stage output and blueprint `githubAnswerTop` summary
+
 ### Reddit Systems Ported In-Natively (No OpenClaw Required)
 
 - Added built-in Reddit research engine to `src/index.js` using OpenClaw-parity behaviors:
