@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { createApp } from "../src/index.js";
 
 test("GET /health returns service metadata", async () => {
@@ -337,8 +340,57 @@ test("magic run includes Playwright-oriented E2E execution tasks", async () => {
   const e2eTasks = tasks.filter((t) => /playwright|e2e/i.test(String(t?.title || "")));
   assert.equal(e2eTasks.length >= 1, true);
   assert.equal(e2eTasks.some((t) => (t.acceptance_criteria || []).some((c) => /planhash|qualityscore|timetofirstwowms/i.test(String(c)))), true);
+  assert.equal(tasks.some((t) => /contract parity/i.test(String(t?.title || ""))), true);
 
   server.close();
+});
+
+test("repo contract gap endpoint detects missing backend routes and alias mismatches", async () => {
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "inayan-contract-gap-"));
+  const webDir = path.join(tmpRoot, "client");
+  const apiDir = path.join(tmpRoot, "server");
+  fs.mkdirSync(webDir, { recursive: true });
+  fs.mkdirSync(apiDir, { recursive: true });
+
+  fs.writeFileSync(
+    path.join(webDir, "admin.js"),
+    [
+      "fetch('/api/admin/tickets');",
+      "fetch('/api/support/ticket/ABC123');",
+      "fetch('/api/admin/dashboard-data');",
+    ].join("\n"),
+    "utf8"
+  );
+  fs.writeFileSync(
+    path.join(apiDir, "routes.js"),
+    [
+      "app.get('/api/support/tickets/:ticketNumber', () => {});",
+      "app.get('/api/dashboard-data', () => {});",
+    ].join("\n"),
+    "utf8"
+  );
+
+  const app = createApp();
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once("listening", resolve));
+  const address = server.address();
+  const port = typeof address === "object" && address ? address.port : 0;
+
+  const response = await fetch(`http://127.0.0.1:${port}/api/v1/repos/contract-gap`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ repoPath: tmpRoot }),
+  });
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.ok, true);
+  assert.equal(body.missingBackendCount >= 1, true);
+  assert.equal(body.probableAliasCount >= 1, true);
+  assert.equal(Array.isArray(body.report?.missingBackend), true);
+  assert.equal(Array.isArray(body.report?.probableAliasMatches), true);
+
+  server.close();
+  fs.rmSync(tmpRoot, { recursive: true, force: true });
 });
 
 test("reddit search endpoint returns ranked results", async () => {

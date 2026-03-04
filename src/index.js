@@ -441,6 +441,7 @@ function buildExecutableBlueprint({
     { path: "src/api/pipeline/magic-run.ts", purpose: "One-click orchestration endpoint + deterministic planner." },
     { path: "src/core/planning/evaluation.ts", purpose: "Quality scorecards and auto-repair gates." },
     { path: "src/core/planning/execution-bridge.ts", purpose: "Convert plans into owner-ready tasks." },
+    { path: "src/core/planning/contract-parity.ts", purpose: "Route contract parity checks between frontend API calls and backend routes." },
     { path: "src/core/planning/project-memory.ts", purpose: "Persist decisions, rejected options, constraints." },
     { path: "src/ui/plan-editor.tsx", purpose: "Interactive constraint editing + plan diffs." },
     { path: "tests/e2e/magic-run.spec.ts", purpose: "Playwright E2E coverage for deterministic magic run flow." },
@@ -463,6 +464,7 @@ function buildExecutableBlueprint({
   const testPlan = [
     "Determinism: identical input produces identical plan hash + structure.",
     "Quality gate: low-score plans fail and return actionable remediation.",
+    "API contract parity: frontend API calls are covered by backend routes or explicit aliases.",
     "Execution bridge: generated tasks include owner, priority, acceptance criteria.",
     "Memory continuity: prior decisions are loaded into next recompile.",
     "Playwright E2E: magic-run UI flow validates proof metrics and task export payloads.",
@@ -497,12 +499,16 @@ function buildExecutableBlueprint({
 
 function evaluateBlueprint(blueprint) {
   const executable = blueprint?.executable || {};
+  const hasContractParity =
+    (executable.testPlan || []).some((x) => /contract parity|route contract|api contract/i.test(String(x)))
+    || (executable.filePlan || []).some((x) => /contract-parity|contract parity/i.test(String(x?.path || x?.purpose || "")));
   const scores = {
     feasibility: executable.filePlan?.length ? 0.82 : 0.35,
     complexity: executable.apiContracts?.length ? 0.78 : 0.4,
     risk: executable.rollout?.length ? 0.75 : 0.42,
     costTime: Array.isArray(blueprint?.selectedRepos) && blueprint.selectedRepos.length >= 3 ? 0.74 : 0.45,
     dependencyCompleteness: executable.dbMigrations?.length && executable.testPlan?.length ? 0.81 : 0.46,
+    contractParity: hasContractParity ? 0.82 : 0.35,
   };
   const avg = Object.values(scores).reduce((a, b) => a + b, 0) / Object.values(scores).length;
   return {
@@ -534,6 +540,17 @@ function buildExecutionBridge(blueprint) {
       acceptance_criteria: [
         "Plans below threshold return remediation and repaired output.",
         "Evaluation scores attached to every plan response.",
+      ],
+    },
+    {
+      priority: 3,
+      owner: "backend",
+      title: "Enforce frontend-backend API contract parity checks",
+      estimateHours: 5,
+      dependencies: ["Implement quality gate + auto-repair"],
+      acceptance_criteria: [
+        "Automated scan detects frontend API endpoints without backend route coverage.",
+        "Known alias mismatches are reported with suggested route mappings.",
       ],
     },
     {
@@ -978,6 +995,14 @@ function computeBreakPatternEvidence(repo) {
     ["raw body", 2],
     ["idempotency", 3],
     ["replay attack", 2],
+    ["contract test", 2],
+    ["supertest", 2],
+    ["playwright", 2],
+    ["api parity", 3],
+    ["route map", 2],
+    ["admin api", 2],
+    ["onboarding", 1],
+    ["ticketing", 1],
     ["rollback", 1],
   ];
   let evidence = 0;
@@ -989,6 +1014,164 @@ function computeBreakPatternEvidence(repo) {
     }
   }
   return { evidence, hits };
+}
+
+function normalizeContractPath(value) {
+  const raw = String(value || "").trim();
+  if (!raw || !raw.startsWith("/")) return "";
+  let p = raw.split("?")[0].split("#")[0];
+  p = p.replace(/\/\$\{[^/]+\}/g, "/:param");
+  p = p.replace(/\/\[[^\]/]+\]/g, "/:param");
+  p = p.replace(/\/:[A-Za-z0-9_]+/g, "/:param");
+  p = p.replace(/\/+/g, "/");
+  p = p.replace(/\/$/, "");
+  return p || "/";
+}
+
+function walkRepoFiles(repoPath, { maxFiles = 5000, maxFileBytes = 1024 * 1024 } = {}) {
+  const files = [];
+  const stack = [repoPath];
+  const ignoredDirs = new Set([
+    ".git",
+    "node_modules",
+    ".next",
+    "dist",
+    "build",
+    "coverage",
+    ".turbo",
+    ".cache",
+    ".vercel",
+  ]);
+  const allowedExtensions = new Set([".js", ".ts", ".jsx", ".tsx", ".mjs", ".cjs", ".html"]);
+  while (stack.length && files.length < maxFiles) {
+    const current = stack.pop();
+    if (!current) continue;
+    let entries = [];
+    try {
+      entries = fs.readdirSync(current, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (files.length >= maxFiles) break;
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        if (!ignoredDirs.has(entry.name)) stack.push(full);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      const ext = path.extname(entry.name).toLowerCase();
+      if (!allowedExtensions.has(ext)) continue;
+      try {
+        const st = fs.statSync(full);
+        if (st.size > 0 && st.size <= maxFileBytes) files.push(full);
+      } catch {
+        // Skip unreadable files.
+      }
+    }
+  }
+  return files;
+}
+
+function extractFrontendApiEndpoints(text) {
+  const out = new Set();
+  const source = String(text || "");
+  const fetchRegex = /fetch\s*\(\s*["'`]([^"'`]+)["'`]/g;
+  const axiosRegex = /\b(?:axios|client)\.(?:get|post|put|patch|delete)\s*\(\s*["'`]([^"'`]+)["'`]/g;
+  const genericRegex = /["'`](\/api\/[^"'`]+)["'`]/g;
+  for (const regex of [fetchRegex, axiosRegex, genericRegex]) {
+    let match = regex.exec(source);
+    while (match) {
+      const normalized = normalizeContractPath(match[1]);
+      if (normalized.startsWith("/api/")) out.add(normalized);
+      match = regex.exec(source);
+    }
+  }
+  return out;
+}
+
+function extractBackendApiRoutes(text) {
+  const out = new Set();
+  const source = String(text || "");
+  const routeRegex = /\b(?:app|router)\.(?:get|post|put|patch|delete|all)\s*\(\s*["'`]([^"'`]+)["'`]/g;
+  let match = routeRegex.exec(source);
+  while (match) {
+    const normalized = normalizeContractPath(match[1]);
+    if (normalized.startsWith("/api/")) out.add(normalized);
+    match = routeRegex.exec(source);
+  }
+  return out;
+}
+
+function findAliasBackendRoute(frontendPath, backendRoutes) {
+  const aliases = [
+    frontendPath.replace(/\/ticket(\/|$)/g, "/tickets$1"),
+    frontendPath.replace(/\/tickets(\/|$)/g, "/ticket$1"),
+    frontendPath.replace(/\/admin\//g, "/"),
+    frontendPath.replace(/\/:param/g, "/:id"),
+  ]
+    .map((x) => normalizeContractPath(x))
+    .filter(Boolean);
+  for (const alias of aliases) {
+    if (backendRoutes.has(alias)) return alias;
+  }
+  return null;
+}
+
+function analyzeRepoContractGap({ repoPath, maxFiles = 5000, maxFileBytes = 1024 * 1024 }) {
+  const files = walkRepoFiles(repoPath, { maxFiles, maxFileBytes });
+  const frontend = new Set();
+  const backend = new Set();
+  const frontendFiles = [];
+  const backendFiles = [];
+
+  for (const file of files) {
+    const rel = path.relative(repoPath, file);
+    let text = "";
+    try {
+      text = fs.readFileSync(file, "utf8");
+    } catch {
+      continue;
+    }
+    const fHits = extractFrontendApiEndpoints(text);
+    if (fHits.size > 0) {
+      frontendFiles.push(rel);
+      for (const x of fHits) frontend.add(x);
+    }
+    const bHits = extractBackendApiRoutes(text);
+    if (bHits.size > 0) {
+      backendFiles.push(rel);
+      for (const x of bHits) backend.add(x);
+    }
+  }
+
+  const missingBackend = [];
+  const probableAliasMatches = [];
+  for (const endpoint of [...frontend].sort()) {
+    if (backend.has(endpoint)) continue;
+    const alias = findAliasBackendRoute(endpoint, backend);
+    if (alias) {
+      probableAliasMatches.push({ frontend: endpoint, backendAlias: alias });
+      continue;
+    }
+    missingBackend.push(endpoint);
+  }
+
+  const coverage = frontend.size
+    ? Math.max(0, Math.min(1, (frontend.size - missingBackend.length) / frontend.size))
+    : 1;
+
+  return {
+    scannedFiles: files.length,
+    frontendFiles: frontendFiles.length,
+    backendFiles: backendFiles.length,
+    frontendEndpoints: [...frontend].sort(),
+    backendRoutes: [...backend].sort(),
+    missingBackend,
+    probableAliasMatches,
+    coverageScore: Math.round(coverage * 1000) / 1000,
+    coveragePct: Math.round(coverage * 10000) / 100,
+  };
 }
 
 function scoreRepo(repo) {
@@ -2291,6 +2474,12 @@ const OpenClawReadinessSchema = z.object({
   limit: z.number().int().min(1).max(100).default(20),
 });
 
+const RepoContractGapSchema = z.object({
+  repoPath: z.string().min(1).max(600),
+  maxFiles: z.number().int().min(10).max(20000).default(5000),
+  maxFileBytes: z.number().int().min(1024).max(5 * 1024 * 1024).default(1024 * 1024),
+});
+
 const OnboardSetupSchema = z.object({
   generateApiKey: z.boolean().default(true),
   builderbotApiKey: z.string().min(8).max(120).optional(),
@@ -2559,6 +2748,30 @@ export function createApp() {
       return res.status(502).json({ ok: false, error: "dashboard_scout_failed", detail: result.error || result.stderr_tail || "dashboard_scout_failed", result });
     }
     return res.json({ ok: true, task: "dashboard_scout", params: p, result });
+  });
+
+  app.post("/api/v1/repos/contract-gap", requireAuth, (req, res) => {
+    const parsed = RepoContractGapSchema.safeParse(req.body || {});
+    if (!parsed.success) return res.status(400).json({ ok: false, error: "invalid_request", details: parsed.error.flatten() });
+    const p = parsed.data;
+    const repoPath = path.resolve(String(p.repoPath || ""));
+    if (!fs.existsSync(repoPath) || !fs.statSync(repoPath).isDirectory()) {
+      return res.status(404).json({ ok: false, error: "repo_not_found", repoPath });
+    }
+    const report = analyzeRepoContractGap({
+      repoPath,
+      maxFiles: p.maxFiles,
+      maxFileBytes: p.maxFileBytes,
+    });
+    return res.json({
+      ok: true,
+      repoPath,
+      coverageScore: report.coverageScore,
+      coveragePct: report.coveragePct,
+      missingBackendCount: report.missingBackend.length,
+      probableAliasCount: report.probableAliasMatches.length,
+      report,
+    });
   });
 
   app.get("/api/v1/github/capabilities", requireAuth, (_req, res) => {
