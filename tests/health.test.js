@@ -107,6 +107,63 @@ test("pipeline run works with seed repos and runExternal=false", async () => {
   server.close();
 });
 
+test("pipeline run includes builtin advanced indexing when enabled", async () => {
+  process.env.EXTERNAL_INDEXING_MODE = "builtin";
+
+  const app = createApp();
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once("listening", resolve));
+
+  const address = server.address();
+  const port = typeof address === "object" && address ? address.port : 0;
+
+  const seedRepos = [
+    {
+      full_name: "acme/real-dashboard-chat",
+      name: "real-dashboard-chat",
+      description: "dashboard chat app with admin panel",
+      stargazers_count: 3400,
+      forks_count: 420,
+      topics: ["dashboard", "chat", "react", "admin"],
+      pushed_at: new Date().toISOString(),
+    },
+    {
+      full_name: "acme/ui-workflow-bot",
+      name: "ui-workflow-bot",
+      description: "workflow dashboard for ai assistant with chat ui",
+      stargazers_count: 2900,
+      forks_count: 310,
+      topics: ["workflow", "dashboard", "chat", "ai"],
+      pushed_at: new Date().toISOString(),
+    },
+  ];
+
+  const response = await fetch(`http://127.0.0.1:${port}/api/v1/masterpiece/pipeline/run`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      productName: "Inaya Index Product",
+      userGoal: "Use builtin advanced indexing pipeline integration.",
+      stack: ["Node.js", "Express", "React"],
+      queries: ["dashboard chat ui"],
+      minStars: 500,
+      topK: 5,
+      runExternal: true,
+      seedRepos,
+    }),
+  });
+
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(Array.isArray(body.stageResults), true);
+  const builtinStage = body.stageResults.find((s) => s.stage === "external_builtin_indexing");
+  assert.equal(Boolean(builtinStage), true);
+  assert.equal(builtinStage.ok, true);
+  assert.equal(Number(builtinStage.detail.benchmarkedCount) > 0, true);
+
+  server.close();
+});
+
 test("chat endpoint returns 503 when no model keys configured", async () => {
   delete process.env.OPENAI_API_KEY;
   delete process.env.DEEPSEEK_API_KEY;

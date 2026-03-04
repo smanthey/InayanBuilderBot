@@ -19,6 +19,7 @@ Set values in `.env`:
 - `PORT`
 - `BUILDERBOT_API_KEY`
 - `ALLOWED_ORIGIN`
+- `EXTERNAL_INDEXING_MODE` (`auto`, `builtin`, `openclaw`)
 - at least one model provider key:
   - `OPENAI_API_KEY`
   - `DEEPSEEK_API_KEY`
@@ -43,6 +44,12 @@ Docker one-click:
 
 ```bash
 docker compose up -d --build
+```
+
+For self-contained advanced indexing integration (no external toolchain), set:
+
+```bash
+EXTERNAL_INDEXING_MODE=builtin
 ```
 
 ## Health Check

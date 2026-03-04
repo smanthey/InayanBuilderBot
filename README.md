@@ -38,7 +38,9 @@ This is a robust, working system, not a lite demo. It includes:
 1. Scout candidate repos from GitHub (or seed repos)
 2. Exclude low-signal framework-only repos
 3. Benchmark and compare top candidates
-4. Optionally execute external OpenClaw indexing/scout stack:
+4. Advanced indexing integration (included by default):
+   - Built-in indexing + benchmark refinement inside InayanBuilderBot (no extra MCP tooling required)
+   - Optional OpenClaw external indexing/scout stack when available:
    - `index:sync:agent`
    - `repo:readiness:pulse`
    - `dashboard:repo:scout`
@@ -62,6 +64,10 @@ Set in `.env`:
 - `ALLOWED_ORIGIN`
 - `GITHUB_TOKEN` (recommended for GitHub API limit)
 - `CLAW_ARCHITECT_ROOT` (optional, default `/Users/tatsheen/claw-architect`)
+- `EXTERNAL_INDEXING_MODE`:
+  - `auto` (default): use OpenClaw if available, otherwise built-in advanced indexing
+  - `builtin`: always use built-in advanced indexing
+  - `openclaw`: require OpenClaw external stack
 - one or more provider keys for live AI chat:
   - `OPENAI_API_KEY`
   - `DEEPSEEK_API_KEY`
@@ -154,6 +160,17 @@ Health:
 ```bash
 curl http://localhost:3000/health
 ```
+
+## Advanced Indexing Without Extra MCP Setup
+
+No extra MCP tools are required for advanced indexing.
+Set:
+
+```bash
+EXTERNAL_INDEXING_MODE=builtin
+```
+
+Then run the normal pipeline endpoint with `runExternal: true` to execute the built-in advanced indexing stage.
 
 ## Security
 

@@ -334,6 +334,55 @@ function benchmarkRepos(repos, weightUi = 0.58, weightPopularity = 0.42) {
     .sort((a, b) => b.benchmarkScore - a.benchmarkScore);
 }
 
+function runBuiltinAdvancedIndexing({ repos, queries, minStars, topK }) {
+  const candidates = Array.isArray(repos) ? repos : [];
+  const scored = candidates
+    .map((repo) => {
+      const base = scoreRepo({
+        full_name: repo.full_name,
+        name: repo.name,
+        description: repo.description,
+        stargazers_count: repo.stars || repo.stargazers_count,
+        forks_count: repo.forks || repo.forks_count,
+        pushed_at: repo.pushed_at,
+        topics: repo.topics || [],
+      });
+      const provenanceBonus = Array.isArray(repo.uiHits) && repo.uiHits.length >= 2 ? 4 : 0;
+      return {
+        ...repo,
+        indexScore: Math.round((base.score + provenanceBonus) * 100) / 100,
+        frameworkOnly: base.frameworkOnly,
+      };
+    })
+    .filter((repo) => !repo.frameworkOnly)
+    .sort((a, b) => Number(b.indexScore || 0) - Number(a.indexScore || 0));
+
+  const shortlisted = scored
+    .filter((repo) => Number(repo.uiEvidence || 0) >= 5)
+    .slice(0, Math.max(6, Math.min(20, topK * 2)));
+
+  const benchmarked = benchmarkRepos(shortlisted, 0.62, 0.38).slice(0, Math.max(6, topK));
+  return {
+    mode: "builtin",
+    criteria: {
+      queries,
+      minStars,
+      topK,
+      mustHaveUiEvidenceAtLeast: 5,
+      excludeFrameworkOnly: true,
+    },
+    indexedCount: scored.length,
+    shortlistedCount: shortlisted.length,
+    benchmarkedCount: benchmarked.length,
+    benchmarkedTop: benchmarked.slice(0, Math.min(8, benchmarked.length)).map((r) => ({
+      full_name: r.full_name,
+      benchmarkScore: r.benchmarkScore,
+      uiEvidence: r.uiEvidence,
+      stars: r.stars || r.stargazers_count || 0,
+    })),
+  };
+}
+
 function readJsonSafe(filePath) {
   try {
     return JSON.parse(fs.readFileSync(filePath, "utf8"));
@@ -798,6 +847,7 @@ export function createApp() {
   const DEEPSEEK_CHAT_MODEL = (process.env.DEEPSEEK_CHAT_MODEL || "deepseek-chat").trim();
   const ANTHROPIC_CHAT_MODEL = (process.env.ANTHROPIC_CHAT_MODEL || process.env.CLAUDE_CHAT_MODEL || "claude-3-5-sonnet-latest").trim();
   const GEMINI_CHAT_MODEL = (process.env.GEMINI_CHAT_MODEL || process.env.GOOGLE_CHAT_MODEL || "gemini-1.5-pro").trim();
+  const EXTERNAL_INDEXING_MODE = (process.env.EXTERNAL_INDEXING_MODE || "auto").trim().toLowerCase();
   const providerStatus = buildProviderStatus({
     openaiApiKey: OPENAI_API_KEY,
     deepseekApiKey: DEEPSEEK_API_KEY,
@@ -1017,9 +1067,9 @@ export function createApp() {
 
     if (p.runExternal) {
       const rootExists = fs.existsSync(CLAW_ARCHITECT_ROOT);
-      if (!rootExists) {
-        stageResults.push({ stage: "external_indexing", ok: false, detail: { error: `missing_path:${CLAW_ARCHITECT_ROOT}` } });
-      } else {
+      const useOpenClaw = EXTERNAL_INDEXING_MODE === "openclaw" || (EXTERNAL_INDEXING_MODE === "auto" && rootExists);
+
+      if (useOpenClaw && rootExists) {
         const extSteps = [
           { name: "index_sync", cmd: "npm", args: ["run", "-s", "index:sync:agent"] },
           { name: "repo_readiness", cmd: "npm", args: ["run", "-s", "repo:readiness:pulse", "--", "--min-score", "80", "--limit", "20"] },
@@ -1041,6 +1091,18 @@ export function createApp() {
             },
           });
         }
+      } else {
+        const builtin = runBuiltinAdvancedIndexing({
+          repos: benchmarkRanked.length ? benchmarkRanked : scoutRepos,
+          queries: p.queries,
+          minStars: p.minStars,
+          topK: p.topK,
+        });
+        stageResults.push({
+          stage: "external_builtin_indexing",
+          ok: true,
+          detail: builtin,
+        });
       }
     }
 

@@ -34,6 +34,15 @@
 - Added end-to-end smoke test:
   - `tests/e2e.smoke.test.js`
 
+### Advanced Indexing Integration Included
+
+- Added built-in advanced indexing stage into pipeline execution when `runExternal=true`.
+- Added mode switch: `EXTERNAL_INDEXING_MODE`:
+  - `auto` (OpenClaw if present, else built-in)
+  - `builtin` (always in-app indexing)
+  - `openclaw` (force external stack)
+- This makes advanced indexing usable out-of-box without extra MCP setup.
+
 ### Environment Alias Support
 
 Additional environment variable aliases are now accepted:
