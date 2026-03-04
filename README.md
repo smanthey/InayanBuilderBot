@@ -26,6 +26,8 @@ This is a robust, working system, not a lite demo. It includes:
 - `POST /api/v1/indexing/sync`
 - `POST /api/v1/indexing/readiness`
 - `POST /api/v1/indexing/dashboard-scout`
+- `GET /api/v1/reddit/capabilities`
+- `POST /api/v1/reddit/search`
 - `POST /api/v1/chat/reply`
 - `POST /api/v1/chat/reply/stream` (SSE)
 - `GET /api/v1/chat/providers`
@@ -50,7 +52,8 @@ This is a robust, working system, not a lite demo. It includes:
    - `repo:readiness:pulse`
    - `dashboard:repo:scout`
 5. Produce a final build blueprint based on selected top repos
-6. Persist artifacts to `.data/runs.json`
+6. Run built-in Reddit research stage (fallback chain + ranked signals)
+7. Persist artifacts to `.data/runs.json`
 
 ## Install
 
@@ -85,6 +88,39 @@ Set in `.env`:
   - `DEEPSEEK_CHAT_MODEL`
   - `ANTHROPIC_CHAT_MODEL` (or `CLAUDE_CHAT_MODEL`)
   - `GEMINI_CHAT_MODEL` (or `GOOGLE_CHAT_MODEL`)
+- Reddit intelligence settings (built-in, OpenClaw-free):
+  - `REDDIT_USER_AGENT`
+  - `REDDIT_DEFAULT_SUBREDDITS`
+  - `REDDIT_REQUEST_TIMEOUT_MS`
+  - optional auth profile inputs:
+    - `REDDIT_AUTH_PROFILES` (JSON array)
+    - `REDDIT_USER_AGENTS` / `REDDIT_ACCESS_TOKENS` (CSV fallback)
+
+## Reddit Research Intelligence
+
+The new system includes the Reddit capability set previously handled in OpenClaw scripts:
+
+- source fallback chain: `reddit_top -> old_reddit_top -> hot -> new -> rss`
+- auth profile rotation (when configured)
+- ranked scoring with engagement + freshness + query-term matching
+- pipeline integration (`reddit_research` stage in `/api/v1/masterpiece/pipeline/run`)
+
+Endpoints:
+
+- `GET /api/v1/reddit/capabilities`
+- `POST /api/v1/reddit/search`
+
+Example request:
+
+```json
+{
+  "query": "dashboard chat ui open source llm",
+  "subreddits": ["AI_Agents", "LocalLLaMA", "webdev"],
+  "limitPerSubreddit": 20,
+  "timeWindow": "year",
+  "maxResults": 60
+}
+```
 
 ## Live AI Chat
 

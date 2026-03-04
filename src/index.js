@@ -517,6 +517,7 @@ function readJsonSafe(filePath) {
 function collectRepoIntelContext({ latestPipeline, allRuns, clawArchitectRoot }) {
   const latestScout = allRuns.find((r) => r.type === "scout");
   const latestBench = allRuns.find((r) => r.type === "benchmark");
+  const latestReddit = allRuns.find((r) => r.type === "reddit_research");
 
   const pipelineRepos = Array.isArray(latestPipeline?.output?.blueprint?.selectedRepos)
     ? latestPipeline.output.blueprint.selectedRepos.map((r) => r.full_name).slice(0, 8)
@@ -556,7 +557,390 @@ function collectRepoIntelContext({ latestPipeline, allRuns, clawArchitectRoot })
     pipeline_top_repos: pipelineRepos,
     scout_top_repos: scoutRepos,
     benchmark_top_repos: benchRepos,
+    reddit_top_signals: Array.isArray(latestReddit?.output?.results)
+      ? latestReddit.output.results.slice(0, 8).map((r) => ({
+        title: r.title,
+        subreddit: r.subreddit,
+        rank_score: r.rank_score,
+        permalink: r.permalink || r.url,
+      }))
+      : [],
     external: externalIntel,
+  };
+}
+
+function parseEnvList(raw) {
+  return String(raw || "")
+    .split(",")
+    .map((v) => v.trim())
+    .filter(Boolean);
+}
+
+function buildRedditAuthProfiles({
+  defaultUserAgent,
+  explicitProfilesJson,
+  userAgentsCsv,
+  accessTokensCsv,
+}) {
+  const explicitRaw = String(explicitProfilesJson || "").trim();
+  if (explicitRaw) {
+    try {
+      const parsed = JSON.parse(explicitRaw);
+      if (Array.isArray(parsed) && parsed.length) {
+        const cleaned = parsed
+          .map((p, i) => ({
+            id: String(p?.id || `profile_${i + 1}`),
+            userAgent: String(p?.userAgent || p?.user_agent || defaultUserAgent),
+            accessToken: String(p?.accessToken || p?.access_token || ""),
+          }))
+          .filter((p) => p.userAgent || p.accessToken);
+        if (cleaned.length) return cleaned;
+      }
+    } catch {
+      // Fall through to CSV-based profile parsing.
+    }
+  }
+
+  const uas = parseEnvList(userAgentsCsv);
+  const toks = parseEnvList(accessTokensCsv);
+  const userAgents = uas.length ? uas : [defaultUserAgent];
+  const accessTokens = toks.length ? toks : [""];
+  const size = Math.max(userAgents.length, accessTokens.length);
+  const profiles = [];
+  for (let i = 0; i < size; i += 1) {
+    profiles.push({
+      id: `profile_${i + 1}`,
+      userAgent: userAgents[i % userAgents.length] || defaultUserAgent,
+      accessToken: accessTokens[i % accessTokens.length] || "",
+    });
+  }
+  return profiles;
+}
+
+async function fetchTextWithTimeout(url, { timeoutMs = 12000, userAgent, accessToken } = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const started = Date.now();
+  try {
+    const headers = {
+      "User-Agent": userAgent || "inayanbuilderbot-reddit/1.0",
+      Accept: "application/json, application/xml, text/xml;q=0.9, */*;q=0.8",
+    };
+    if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+    const response = await fetch(url, {
+      method: "GET",
+      headers,
+      signal: controller.signal,
+    });
+    const body = await response.text();
+    return {
+      ok: response.ok,
+      status: response.status,
+      body,
+      latencyMs: Date.now() - started,
+      error: response.ok ? null : `HTTP ${response.status}`,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      status: 0,
+      body: "",
+      latencyMs: Date.now() - started,
+      error: String(error?.message || error || "request_failed"),
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchJsonWithTimeout(url, opts = {}) {
+  const textRes = await fetchTextWithTimeout(url, opts);
+  if (!textRes.ok) return { ...textRes, data: null };
+  try {
+    return { ...textRes, data: JSON.parse(textRes.body || "null") };
+  } catch {
+    return { ...textRes, ok: false, error: "invalid_json", data: null };
+  }
+}
+
+function shouldRetryRedditWithNextProfile(result) {
+  const status = Number(result?.status || 0);
+  if (status === 401 || status === 403 || status === 429) return true;
+  const err = String(result?.error || "").toLowerCase();
+  return err.includes("abort") || err.includes("timeout") || err.includes("network");
+}
+
+async function fetchTextWithProfileFallback(url, { authProfiles, timeoutMs = 12000, sourceHealth, source }) {
+  const errors = [];
+  const profiles = Array.isArray(authProfiles) && authProfiles.length
+    ? authProfiles
+    : [{ id: "profile_1", userAgent: "inayanbuilderbot-reddit/1.0", accessToken: "" }];
+
+  for (let i = 0; i < profiles.length; i += 1) {
+    const profile = profiles[i];
+    const result = await fetchTextWithTimeout(url, {
+      timeoutMs,
+      userAgent: profile.userAgent,
+      accessToken: profile.accessToken,
+    });
+    sourceHealth.push({
+      source,
+      profileId: profile.id,
+      ok: result.ok,
+      status: result.status,
+      latencyMs: result.latencyMs,
+      error: result.ok ? null : String(result.error || "request_failed"),
+    });
+    if (result.ok) return { ...result, profileId: profile.id, fallbackErrors: errors };
+    errors.push(`${profile.id}:${result.error || `HTTP ${result.status || 0}`}`);
+    if (!shouldRetryRedditWithNextProfile(result)) {
+      return { ...result, profileId: profile.id, fallbackErrors: errors };
+    }
+    await sleep(Math.min(1000, 120 + i * 120));
+  }
+
+  return {
+    ok: false,
+    status: 0,
+    body: "",
+    latencyMs: 0,
+    error: errors.join(" | ") || "all_auth_profiles_failed",
+    profileId: null,
+    fallbackErrors: errors,
+  };
+}
+
+async function fetchJsonWithProfileFallback(url, opts) {
+  const textRes = await fetchTextWithProfileFallback(url, opts);
+  if (!textRes.ok) return { ...textRes, data: null };
+  try {
+    return { ...textRes, data: JSON.parse(textRes.body || "null") };
+  } catch {
+    return { ...textRes, ok: false, error: "invalid_json", data: null };
+  }
+}
+
+function parseRssItems(xml) {
+  const items = [];
+  const blocks = String(xml || "").split(/<item>/i).slice(1);
+  for (const block of blocks) {
+    const title = (block.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/i) || [])[1] || "";
+    const link = (block.match(/<link>(.*?)<\/link>/i) || [])[1] || "";
+    const pubDate = (block.match(/<pubDate>(.*?)<\/pubDate>/i) || [])[1] || "";
+    if (title && link) items.push({ title, link, pubDate });
+  }
+  return items;
+}
+
+function normalizeRedditJsonPost(data) {
+  return {
+    id: data?.id || null,
+    title: data?.title || "",
+    subreddit: data?.subreddit || null,
+    author: data?.author || null,
+    permalink: data?.permalink ? `https://www.reddit.com${data.permalink}` : null,
+    url: data?.url || null,
+    selftext: data?.selftext || "",
+    created_utc: Number(data?.created_utc || 0),
+    score: Number(data?.score || 0),
+    comments: Number(data?.num_comments || 0),
+    upvote_ratio: Number(data?.upvote_ratio || 0),
+    over_18: Boolean(data?.over_18),
+    source: data?.source || "reddit_json",
+  };
+}
+
+function normalizeRssRedditPost(item, subreddit) {
+  return {
+    id: null,
+    title: item?.title || "",
+    subreddit,
+    author: null,
+    permalink: item?.link || null,
+    url: item?.link || null,
+    selftext: "",
+    created_utc: item?.pubDate ? Math.floor(Date.parse(item.pubDate) / 1000) : 0,
+    score: 0,
+    comments: 0,
+    upvote_ratio: 0.5,
+    over_18: false,
+    source: "rss",
+  };
+}
+
+function tokenizeSearchText(text) {
+  return String(text || "")
+    .toLowerCase()
+    .split(/[^a-z0-9+._-]+/g)
+    .filter((t) => t && t.length >= 3);
+}
+
+function rankRedditScore(post) {
+  return Number(post.score || 0) + Number(post.comments || 0) * 0.25;
+}
+
+function qualityBoostReddit(post, preferredKeywords = []) {
+  const txt = `${post.title || ""} ${post.selftext || ""}`.toLowerCase();
+  let boost = 0;
+  for (const kw of preferredKeywords) {
+    if (txt.includes(String(kw || "").toLowerCase())) boost += 20;
+  }
+  return boost;
+}
+
+function scoreRedditPost(post, queryTokens = [], preferredKeywords = []) {
+  const txt = `${post.title || ""} ${post.selftext || ""}`.toLowerCase();
+  const matchedTerms = queryTokens.filter((t) => txt.includes(t));
+  const freshness = post.created_utc
+    ? Math.max(0, 20 - Math.min(20, (Date.now() / 1000 - post.created_utc) / (3600 * 24 * 14)))
+    : 0;
+  const quality = rankRedditScore(post) + qualityBoostReddit(post, preferredKeywords);
+  const ratioBonus = Math.max(0, Math.min(10, Number(post.upvote_ratio || 0) * 10));
+  const rank_score = Math.round(Math.max(0, quality + freshness + ratioBonus + matchedTerms.length * 8) * 100) / 100;
+  return { ...post, rank_score, matched_terms: matchedTerms.slice(0, 12) };
+}
+
+async function fetchRedditSubredditWithFallback({
+  subreddit,
+  query,
+  timeWindow,
+  limitPerSubreddit,
+  authProfiles,
+  timeoutMs,
+  sourceHealth,
+}) {
+  const attempts = [
+    {
+      source: "reddit_top",
+      url: `https://www.reddit.com/r/${encodeURIComponent(subreddit)}/search.json?q=${encodeURIComponent(query)}&restrict_sr=1&sort=top&t=${encodeURIComponent(timeWindow)}&limit=${limitPerSubreddit}&raw_json=1`,
+    },
+    {
+      source: "old_reddit_top",
+      url: `https://old.reddit.com/r/${encodeURIComponent(subreddit)}/search.json?q=${encodeURIComponent(query)}&restrict_sr=1&sort=top&t=${encodeURIComponent(timeWindow)}&limit=${limitPerSubreddit}&raw_json=1`,
+    },
+    {
+      source: "hot",
+      url: `https://www.reddit.com/r/${encodeURIComponent(subreddit)}/hot.json?limit=${limitPerSubreddit}&raw_json=1`,
+    },
+    {
+      source: "new",
+      url: `https://www.reddit.com/r/${encodeURIComponent(subreddit)}/new.json?limit=${limitPerSubreddit}&raw_json=1`,
+    },
+  ];
+
+  const errors = [];
+  for (let i = 0; i < attempts.length; i += 1) {
+    const attempt = attempts[i];
+    const result = await fetchJsonWithProfileFallback(attempt.url, {
+      authProfiles,
+      timeoutMs,
+      sourceHealth,
+      source: attempt.source,
+    });
+    if (!result.ok) {
+      errors.push(`${attempt.source}:${result.error || `HTTP ${result.status || 0}`}`);
+      await sleep(Math.min(1000, 120 + i * 120));
+      continue;
+    }
+    const children = Array.isArray(result?.data?.data?.children) ? result.data.data.children : [];
+    const posts = children
+      .map((c) => normalizeRedditJsonPost({ ...(c?.data || {}), source: attempt.source }))
+      .filter((p) => p.title);
+    if (posts.length) {
+      return { ok: true, source: attempt.source, status: result.status, posts, errors };
+    }
+    errors.push(`${attempt.source}:empty`);
+  }
+
+  const rssUrl = `https://www.reddit.com/r/${encodeURIComponent(subreddit)}/search.rss?q=${encodeURIComponent(query)}&restrict_sr=1&sort=top&t=${encodeURIComponent(timeWindow)}`;
+  const rss = await fetchTextWithProfileFallback(rssUrl, {
+    authProfiles,
+    timeoutMs,
+    sourceHealth,
+    source: "rss",
+  });
+  if (!rss.ok) {
+    errors.push(`rss:${rss.error || `HTTP ${rss.status || 0}`}`);
+    return { ok: false, source: "none", status: rss.status || 0, posts: [], errors };
+  }
+
+  const items = parseRssItems(rss.body).slice(0, limitPerSubreddit);
+  if (!items.length) {
+    errors.push("rss:empty");
+    return { ok: false, source: "none", status: rss.status || 0, posts: [], errors };
+  }
+
+  return {
+    ok: true,
+    source: "rss",
+    status: rss.status,
+    posts: items.map((it) => normalizeRssRedditPost(it, subreddit)),
+    errors,
+  };
+}
+
+async function runRedditResearch({
+  query,
+  subreddits,
+  limitPerSubreddit,
+  timeWindow,
+  maxResults,
+  redditUserAgent,
+  redditAuthProfiles,
+  redditRequestTimeoutMs,
+}) {
+  const sourceHealth = [];
+  const authProfiles = Array.isArray(redditAuthProfiles) && redditAuthProfiles.length
+    ? redditAuthProfiles
+    : [{ id: "profile_1", userAgent: redditUserAgent, accessToken: "" }];
+  const queryTokens = [...new Set(tokenizeSearchText(query))].slice(0, 24);
+  const preferredKeywords = ["dashboard", "chat", "benchmark", "workflow", "agent", "ui"];
+  const rows = [];
+  const sourceErrors = [];
+
+  for (const subreddit of subreddits) {
+    const res = await fetchRedditSubredditWithFallback({
+      subreddit,
+      query,
+      timeWindow,
+      limitPerSubreddit,
+      authProfiles,
+      timeoutMs: redditRequestTimeoutMs,
+      sourceHealth,
+    });
+    if (!res.ok) {
+      sourceErrors.push({ subreddit, error: (res.errors || []).join(" | ") || "all_fallbacks_failed" });
+      continue;
+    }
+    for (const post of res.posts) {
+      rows.push(scoreRedditPost(post, queryTokens, preferredKeywords));
+    }
+  }
+
+  const dedup = new Map();
+  for (const row of rows) {
+    const key = String(row.id || row.permalink || row.url || "");
+    if (!key || dedup.has(key)) continue;
+    dedup.set(key, row);
+  }
+  const ranked = [...dedup.values()]
+    .sort((a, b) => Number(b.rank_score || 0) - Number(a.rank_score || 0))
+    .slice(0, maxResults);
+
+  return {
+    summary: {
+      generated_at: new Date().toISOString(),
+      query,
+      subreddits,
+      limit_per_subreddit: limitPerSubreddit,
+      time_window: timeWindow,
+      indexed_posts: ranked.length,
+      source_errors: sourceErrors,
+      top_terms: queryTokens,
+      source_health: sourceHealth,
+      auth_profiles: authProfiles.map((p) => ({ id: p.id, hasAccessToken: Boolean(p.accessToken) })),
+    },
+    results: ranked,
   };
 }
 
@@ -934,7 +1318,23 @@ const PipelineSchema = z.object({
   minStars: z.number().int().min(100).max(500000).default(500),
   topK: z.number().int().min(3).max(30).default(10),
   runExternal: z.boolean().default(true),
+  runRedditResearch: z.boolean().default(true),
+  reddit: z.object({
+    query: z.string().min(2).max(300).optional(),
+    subreddits: z.array(z.string().min(2).max(60)).min(1).max(30).optional(),
+    limitPerSubreddit: z.number().int().min(3).max(100).default(25),
+    timeWindow: z.string().min(1).max(20).default("year"),
+    maxResults: z.number().int().min(5).max(200).default(60),
+  }).optional(),
   seedRepos: ScoutSchema.shape.seedRepos,
+});
+
+const RedditSearchSchema = z.object({
+  query: z.string().min(2).max(300),
+  subreddits: z.array(z.string().min(2).max(60)).min(1).max(30).optional(),
+  limitPerSubreddit: z.number().int().min(3).max(100).default(25),
+  timeWindow: z.string().min(1).max(20).default("year"),
+  maxResults: z.number().int().min(5).max(200).default(60),
 });
 
 const ChatSchema = z.object({
@@ -982,6 +1382,24 @@ export function createApp() {
   const DEEPSEEK_CHAT_MODEL = (process.env.DEEPSEEK_CHAT_MODEL || "deepseek-chat").trim();
   const ANTHROPIC_CHAT_MODEL = (process.env.ANTHROPIC_CHAT_MODEL || process.env.CLAUDE_CHAT_MODEL || "claude-3-5-sonnet-latest").trim();
   const GEMINI_CHAT_MODEL = (process.env.GEMINI_CHAT_MODEL || process.env.GOOGLE_CHAT_MODEL || "gemini-1.5-pro").trim();
+  const REDDIT_USER_AGENT = (process.env.REDDIT_USER_AGENT || "inayanbuilderbot-reddit/1.0").trim();
+  const REDDIT_AUTH_PROFILES = (process.env.REDDIT_AUTH_PROFILES || "").trim();
+  const REDDIT_USER_AGENTS = (process.env.REDDIT_USER_AGENTS || process.env.REDDIT_USER_AGENT_PROFILES || "").trim();
+  const REDDIT_ACCESS_TOKENS = (process.env.REDDIT_ACCESS_TOKENS || process.env.REDDIT_ACCESS_TOKEN_PROFILES || "").trim();
+  const REDDIT_DEFAULT_SUBREDDITS = parseEnvList(
+    process.env.REDDIT_DEFAULT_SUBREDDITS
+      || "AI_Agents,LocalLLaMA,MachineLearning,programming,webdev,OpenAI,ClaudeAI"
+  );
+  const REDDIT_REQUEST_TIMEOUT_MS = Math.max(
+    2500,
+    Number(process.env.REDDIT_REQUEST_TIMEOUT_MS || "12000") || 12000
+  );
+  const redditAuthProfiles = buildRedditAuthProfiles({
+    defaultUserAgent: REDDIT_USER_AGENT,
+    explicitProfilesJson: REDDIT_AUTH_PROFILES,
+    userAgentsCsv: REDDIT_USER_AGENTS,
+    accessTokensCsv: REDDIT_ACCESS_TOKENS,
+  });
   const EXTERNAL_INDEXING_MODE = (process.env.EXTERNAL_INDEXING_MODE || "builtin").trim().toLowerCase();
   const providerStatus = buildProviderStatus({
     openaiApiKey: OPENAI_API_KEY,
@@ -1090,6 +1508,69 @@ export function createApp() {
       return res.status(502).json({ ok: false, error: "dashboard_scout_failed", detail: result.error || result.stderr_tail || "dashboard_scout_failed", result });
     }
     return res.json({ ok: true, task: "dashboard_scout", params: p, result });
+  });
+
+  app.get("/api/v1/reddit/capabilities", requireAuth, (_req, res) => {
+    return res.json({
+      ok: true,
+      reddit: {
+        enabled: true,
+        defaultSubreddits: REDDIT_DEFAULT_SUBREDDITS,
+        requestTimeoutMs: REDDIT_REQUEST_TIMEOUT_MS,
+        authProfiles: redditAuthProfiles.map((p) => ({
+          id: p.id,
+          userAgentConfigured: Boolean(p.userAgent),
+          accessTokenConfigured: Boolean(p.accessToken),
+        })),
+        sourceOrder: ["reddit_top", "old_reddit_top", "hot", "new", "rss"],
+      },
+    });
+  });
+
+  app.post("/api/v1/reddit/search", requireAuth, async (req, res) => {
+    const parsed = RedditSearchSchema.safeParse(req.body || {});
+    if (!parsed.success) return res.status(400).json({ ok: false, error: "invalid_request", details: parsed.error.flatten() });
+
+    try {
+      const p = parsed.data;
+      const subreddits = Array.isArray(p.subreddits) && p.subreddits.length
+        ? p.subreddits
+        : REDDIT_DEFAULT_SUBREDDITS;
+      const report = await runRedditResearch({
+        query: p.query,
+        subreddits,
+        limitPerSubreddit: p.limitPerSubreddit,
+        timeWindow: p.timeWindow,
+        maxResults: p.maxResults,
+        redditUserAgent: REDDIT_USER_AGENT,
+        redditAuthProfiles,
+        redditRequestTimeoutMs: REDDIT_REQUEST_TIMEOUT_MS,
+      });
+
+      const run = {
+        id: nowId("reddit"),
+        type: "reddit_research",
+        createdAt: new Date().toISOString(),
+        payload: { ...p, subreddits },
+        output: report,
+      };
+      appState.runs.unshift(run);
+      trimHistory();
+      persistDataStore();
+
+      return res.json({
+        ok: true,
+        runId: run.id,
+        summary: report.summary,
+        results: report.results,
+      });
+    } catch (err) {
+      return res.status(500).json({
+        ok: false,
+        error: "reddit_search_failed",
+        detail: String(err?.message || err),
+      });
+    }
   });
 
   app.post("/api/v1/scout/run", requireAuth, async (req, res) => {
@@ -1219,6 +1700,7 @@ export function createApp() {
     const runId = nowId("pipeline");
     const startedAt = new Date().toISOString();
     const stageResults = [];
+    let redditReport = null;
 
     const scoutPayload = {
       queries: p.queries,
@@ -1317,6 +1799,45 @@ export function createApp() {
       }
     }
 
+    if (p.runRedditResearch) {
+      const redditQuery = String(
+        p?.reddit?.query
+        || `${p.productName} ${p.userGoal} ${p.queries.join(" ")} dashboard chat ui`
+      ).slice(0, 300);
+      const redditSubreddits = Array.isArray(p?.reddit?.subreddits) && p.reddit.subreddits.length
+        ? p.reddit.subreddits
+        : REDDIT_DEFAULT_SUBREDDITS;
+      try {
+        redditReport = await runRedditResearch({
+          query: redditQuery,
+          subreddits: redditSubreddits,
+          limitPerSubreddit: Number(p?.reddit?.limitPerSubreddit || 25),
+          timeWindow: String(p?.reddit?.timeWindow || "year"),
+          maxResults: Number(p?.reddit?.maxResults || 60),
+          redditUserAgent: REDDIT_USER_AGENT,
+          redditAuthProfiles,
+          redditRequestTimeoutMs: REDDIT_REQUEST_TIMEOUT_MS,
+        });
+        stageResults.push({
+          stage: "reddit_research",
+          ok: true,
+          detail: {
+            query: redditQuery,
+            indexed_posts: Number(redditReport?.summary?.indexed_posts || 0),
+            source_errors: Array.isArray(redditReport?.summary?.source_errors) ? redditReport.summary.source_errors.length : 0,
+          },
+        });
+      } catch (err) {
+        stageResults.push({
+          stage: "reddit_research",
+          ok: false,
+          detail: {
+            error: String(err?.message || err),
+          },
+        });
+      }
+    }
+
     const selectedRepos = benchmarkRanked.slice(0, Math.min(6, benchmarkRanked.length)).map((r) => ({
       full_name: r.full_name,
       benchmarkScore: r.benchmarkScore,
@@ -1331,12 +1852,21 @@ export function createApp() {
       summary: {
         scout_count: scoutRepos.length,
         benchmark_count: benchmarkRanked.length,
+        reddit_indexed_posts: Number(redditReport?.summary?.indexed_posts || 0),
         external_stages: stageResults.filter((s) => s.stage.startsWith("external_")).length,
       },
+      redditSignalTop: Array.isArray(redditReport?.results)
+        ? redditReport.results.slice(0, 8).map((r) => ({
+          title: r.title,
+          subreddit: r.subreddit,
+          rank_score: r.rank_score,
+          permalink: r.permalink || r.url,
+        }))
+        : [],
       generatedAt: new Date().toISOString(),
     };
 
-    const ok = stageResults.every((s) => s.ok || s.stage.startsWith("external_"));
+    const ok = stageResults.every((s) => s.ok || s.stage.startsWith("external_") || s.stage === "reddit_research");
     const run = {
       id: runId,
       type: "pipeline",
@@ -1347,6 +1877,7 @@ export function createApp() {
         stageResults,
         scout: scoutRepos,
         benchmark: benchmarkRanked,
+        reddit: redditReport,
         blueprint,
       },
     };
@@ -1355,7 +1886,7 @@ export function createApp() {
     trimHistory();
     persistDataStore();
 
-    return res.json({ ok, runId, stageResults, scout: scoutRepos, benchmark: benchmarkRanked, blueprint });
+    return res.json({ ok, runId, stageResults, scout: scoutRepos, benchmark: benchmarkRanked, reddit: redditReport, blueprint });
   });
 
   const redactSensitiveError = (value) => String(value || "")

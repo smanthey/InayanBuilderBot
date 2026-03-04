@@ -182,6 +182,148 @@ test("pipeline run includes builtin advanced indexing when enabled", async () =>
   server.close();
 });
 
+test("reddit search endpoint returns ranked results", async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async (url, options = {}) => {
+    const target = String(url || "");
+    if (target.includes("reddit.com/r/AI_Agents/search.json")) {
+      return new Response(
+        JSON.stringify({
+          data: {
+            children: [
+              {
+                data: {
+                  id: "abc123",
+                  title: "Best dashboard chat ui stack for agent builders",
+                  subreddit: "AI_Agents",
+                  permalink: "/r/AI_Agents/comments/abc123/best_dashboard_chat_ui/",
+                  score: 144,
+                  num_comments: 22,
+                  upvote_ratio: 0.97,
+                  created_utc: Math.floor(Date.now() / 1000) - 3600,
+                },
+              },
+            ],
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    return originalFetch(url, options);
+  };
+
+  const app = createApp();
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once("listening", resolve));
+  try {
+    const address = server.address();
+    const port = typeof address === "object" && address ? address.port : 0;
+    const response = await originalFetch(`http://127.0.0.1:${port}/api/v1/reddit/search`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query: "dashboard chat ui",
+        subreddits: ["AI_Agents"],
+        limitPerSubreddit: 10,
+        maxResults: 10,
+        timeWindow: "year",
+      }),
+    });
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, true);
+    assert.equal(typeof body.runId, "string");
+    assert.equal(Array.isArray(body.results), true);
+    assert.equal(body.results.length, 1);
+    assert.equal(body.results[0].subreddit, "AI_Agents");
+    assert.equal(Number(body.results[0].rank_score) > 0, true);
+  } finally {
+    global.fetch = originalFetch;
+    server.close();
+  }
+});
+
+test("pipeline includes reddit_research stage", async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async (url, options = {}) => {
+    const target = String(url || "");
+    if (target.includes("/search.json")) {
+      return new Response(
+        JSON.stringify({
+          data: {
+            children: [
+              {
+                data: {
+                  id: "redditpipe1",
+                  title: "Agent chat dashboard benchmark notes",
+                  subreddit: "AI_Agents",
+                  permalink: "/r/AI_Agents/comments/redditpipe1/agent_chat_dashboard_benchmark/",
+                  score: 85,
+                  num_comments: 12,
+                  upvote_ratio: 0.94,
+                  created_utc: Math.floor(Date.now() / 1000) - 7200,
+                },
+              },
+            ],
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    return originalFetch(url, options);
+  };
+
+  process.env.EXTERNAL_INDEXING_MODE = "builtin";
+  const app = createApp();
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once("listening", resolve));
+  try {
+    const address = server.address();
+    const port = typeof address === "object" && address ? address.port : 0;
+
+    const seedRepos = [
+      {
+        full_name: "acme/agent-dashboard-chat",
+        name: "agent-dashboard-chat",
+        description: "dashboard and chat app for ai agents",
+        stargazers_count: 3500,
+        forks_count: 400,
+        topics: ["dashboard", "chat", "ai"],
+        pushed_at: new Date().toISOString(),
+      },
+    ];
+
+    const response = await originalFetch(`http://127.0.0.1:${port}/api/v1/masterpiece/pipeline/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        productName: "Inaya Reddit Pipeline Product",
+        userGoal: "Build benchmark-first dashboard chat system with external signal validation.",
+        stack: ["Node.js", "Express", "React"],
+        queries: ["dashboard chat ui"],
+        minStars: 500,
+        topK: 5,
+        runExternal: false,
+        runRedditResearch: true,
+        reddit: { query: "dashboard chat ui", subreddits: ["AI_Agents"], maxResults: 20 },
+        seedRepos,
+      }),
+    });
+
+    const body = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(Array.isArray(body.stageResults), true);
+    const redditStage = body.stageResults.find((s) => s.stage === "reddit_research");
+    assert.equal(Boolean(redditStage), true);
+    assert.equal(redditStage.ok, true);
+    assert.equal(Number(body.blueprint?.summary?.reddit_indexed_posts || 0) > 0, true);
+  } finally {
+    global.fetch = originalFetch;
+    server.close();
+  }
+});
+
 test("chat endpoint returns 503 when no model keys configured", async () => {
   delete process.env.OPENAI_API_KEY;
   delete process.env.DEEPSEEK_API_KEY;

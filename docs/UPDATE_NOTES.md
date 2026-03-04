@@ -2,6 +2,24 @@
 
 ## 2026-03-04
 
+### Reddit Systems Ported In-Natively (No OpenClaw Required)
+
+- Added built-in Reddit research engine to `src/index.js` using OpenClaw-parity behaviors:
+  - source fallback order: `reddit_top`, `old_reddit_top`, `hot`, `new`, `rss`
+  - auth profile rotation via `REDDIT_AUTH_PROFILES` or `REDDIT_USER_AGENTS` + `REDDIT_ACCESS_TOKENS`
+  - ranking with engagement, freshness, quality boosts, and query-term matching
+- Added endpoints:
+  - `GET /api/v1/reddit/capabilities`
+  - `POST /api/v1/reddit/search`
+- Added pipeline integration:
+  - `runRedditResearch` toggle (default `true`) in `/api/v1/masterpiece/pipeline/run`
+  - `reddit_research` stage output and blueprint `redditSignalTop` summary
+- Added environment options in `.env.example`:
+  - `REDDIT_USER_AGENT`
+  - `REDDIT_DEFAULT_SUBREDDITS`
+  - `REDDIT_REQUEST_TIMEOUT_MS`
+  - optional profile settings (`REDDIT_AUTH_PROFILES`, `REDDIT_USER_AGENTS`, `REDDIT_ACCESS_TOKENS`)
+
 ### No-OpenClaw Default + Curated External Repo Index
 
 - `EXTERNAL_INDEXING_MODE` default is now `builtin`.

@@ -25,6 +25,10 @@ Set values in `.env`:
   - `DEEPSEEK_API_KEY`
   - `ANTHROPIC_API_KEY` or `CLAUDE_API_KEY`
   - `GEMINI_API_KEY` or `GOOGLE_API_KEY`
+- optional built-in Reddit research settings:
+  - `REDDIT_USER_AGENT`
+  - `REDDIT_DEFAULT_SUBREDDITS`
+  - `REDDIT_REQUEST_TIMEOUT_MS`
 
 ## Run
 
