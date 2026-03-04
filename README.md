@@ -133,4 +133,5 @@ npm run test
 - [Security](docs/SECURITY.md)
 - [Installation](docs/INSTALLATION.md)
 - [Gap Analysis](docs/GAP_ANALYSIS.md)
+- [Update Notes](docs/UPDATE_NOTES.md)
 - [Security Best Practices Report](security_best_practices_report.md)
