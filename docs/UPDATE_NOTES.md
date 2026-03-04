@@ -1,5 +1,31 @@
 # Update Notes
 
+## 2026-03-04 (README Professional Refresh + AI Search Discoverability)
+
+### Summary
+
+Refactored documentation for clearer product positioning, faster onboarding, and stronger SEO/AI retrieval performance.
+
+### Changes shipped
+
+- Rewrote `README.md` with:
+  - deterministic magic-run headline positioning
+  - complete endpoint grouping by function
+  - quickstart + health verification commands
+  - runnable magic-run `curl` example
+  - quality/determinism proof metrics (`planHash`, `qualityScore`, `timeToFirstWowMs`)
+  - architecture, security, and docs cross-links
+- Added new maintainer guide:
+  - `docs/AI_SEARCH_DISCOVERABILITY.md`
+  - standards for keyword consistency, endpoint naming, evidence claims, and release-note hygiene
+
+### Verification
+
+- README endpoint list cross-checked against `src/index.js` routes.
+- Documentation index updated to include discoverability guide.
+
+---
+
 ## 2026-03-04 (Onboarding Wizard + Versioned Benchmark Refresh)
 
 ### Guided onboarding with verification
