@@ -187,6 +187,60 @@ function benchmarkRepos(repos, weightUi = 0.58, weightPopularity = 0.42) {
     .sort((a, b) => b.benchmarkScore - a.benchmarkScore);
 }
 
+function readJsonSafe(filePath) {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function collectRepoIntelContext({ latestPipeline, allRuns, clawArchitectRoot }) {
+  const latestScout = allRuns.find((r) => r.type === "scout");
+  const latestBench = allRuns.find((r) => r.type === "benchmark");
+
+  const pipelineRepos = Array.isArray(latestPipeline?.output?.blueprint?.selectedRepos)
+    ? latestPipeline.output.blueprint.selectedRepos.map((r) => r.full_name).slice(0, 8)
+    : [];
+  const scoutRepos = Array.isArray(latestScout?.output)
+    ? latestScout.output.map((r) => r.full_name).slice(0, 8)
+    : [];
+  const benchRepos = Array.isArray(latestBench?.output)
+    ? latestBench.output.map((r) => ({ full_name: r.full_name, benchmarkScore: r.benchmarkScore })).slice(0, 8)
+    : [];
+
+  const externalIntel = {
+    dashboard_scout_top: [],
+    readiness_weakest: [],
+  };
+
+  const scoutPath = path.join(clawArchitectRoot, "scripts", "reports", "dashboard-chatbot-repo-scout-latest.json");
+  const readinessPath = path.join(clawArchitectRoot, "scripts", "reports", "repo-readiness-pulse-latest.json");
+
+  const externalScout = readJsonSafe(scoutPath);
+  if (Array.isArray(externalScout?.top_selected)) {
+    externalIntel.dashboard_scout_top = externalScout.top_selected
+      .slice(0, 8)
+      .map((r) => ({ full_name: r.full_name, rank_score: r.rank_score, ui_score: r.ui_score }));
+  }
+
+  const externalReadiness = readJsonSafe(readinessPath);
+  if (Array.isArray(externalReadiness?.repos)) {
+    externalIntel.readiness_weakest = externalReadiness.repos
+      .slice()
+      .sort((a, b) => Number(a?.score?.total || 0) - Number(b?.score?.total || 0))
+      .slice(0, 8)
+      .map((r) => ({ repo: r.repo, score: r?.score?.total, reasons: r.reasons || [] }));
+  }
+
+  return {
+    pipeline_top_repos: pipelineRepos,
+    scout_top_repos: scoutRepos,
+    benchmark_top_repos: benchRepos,
+    external: externalIntel,
+  };
+}
+
 async function requestChatCompletion({
   provider,
   apiKey,
@@ -237,6 +291,8 @@ async function generateModelReply({
   message,
   context,
   latestPipeline,
+  allRuns,
+  clawArchitectRoot,
   providerPreference,
   modelOverride,
   temperature,
@@ -245,10 +301,11 @@ async function generateModelReply({
   openaiModel,
   deepseekModel,
 }) {
-  const topRepos = latestPipeline?.output?.blueprint?.selectedRepos || [];
-  const topRepoText = topRepos.length
-    ? topRepos.map((r) => r.full_name).slice(0, 5).join(", ")
-    : "none yet";
+  const intel = collectRepoIntelContext({
+    latestPipeline,
+    allRuns,
+    clawArchitectRoot,
+  });
 
   const systemPrompt = [
     "You are InayanBuilderBot, a production-grade Masterpiece Agent + Chat Tool.",
@@ -261,7 +318,7 @@ async function generateModelReply({
   const userPrompt = JSON.stringify({
     message,
     context: context || {},
-    latest_pipeline_top_repos: topRepoText,
+    repo_intel_context: intel,
     guidance_focus: [
       "indexing strategy",
       "repo benchmark compare",
@@ -685,6 +742,8 @@ export function createApp() {
         message,
         context,
         latestPipeline,
+        allRuns: appState.runs,
+        clawArchitectRoot: CLAW_ARCHITECT_ROOT,
         providerPreference: provider,
         modelOverride: model,
         temperature,
