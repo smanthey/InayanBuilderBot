@@ -419,80 +419,72 @@
       <aside class="panel right">
         <div class="right-wrap">
           <div class="section">
-            <div class="title">Masterpiece Pipeline</div>
-            <div class="muted">Research, index, benchmark, and build in one control pane.</div>
+            <div class="title">Deterministic Magic Run</div>
+            <div class="muted">Single headline flow with proof metrics and recompile diffs.</div>
           </div>
 
           <div class="right-scroll">
             <div class="card">
-              <h3>Pipeline Inputs</h3>
-              <label class="muted">Queries (one per line)</label>
-              <textarea id="queries">open source dashboard chatbot
-open source ai agent ui
-open source workflow automation dashboard</textarea>
-              <div class="pair" style="margin-top:8px;">
-                <input id="minStars" value="500" placeholder="min stars" />
-                <input id="topK" value="10" placeholder="top K" />
-              </div>
+              <h3>Magic Run Inputs</h3>
               <label class="muted" style="margin-top:8px; display:block;">Product Name</label>
-              <input id="productName" value="Inaya Masterpiece Control Plane" />
+              <input id="productName" value="InayanBuilder" />
               <label class="muted" style="margin-top:8px; display:block;">Goal</label>
-              <textarea id="goal">Build a robust dashboard and chat product with benchmarked OSS module selection, production hardening, and complete release paperwork.</textarea>
+              <textarea id="goal">Generate deterministic, implementation-ready build plans with evidence-backed decisions and execution tasks.</textarea>
               <label class="muted" style="margin-top:8px; display:block;">Stack (comma-separated)</label>
               <input id="stack" value="Node.js,Express,React,PostgreSQL" />
+              <div class="pair" style="margin-top:8px;">
+                <input id="budgetUsd" value="5000" placeholder="budget USD" />
+                <input id="deadlineDays" value="14" placeholder="deadline days" />
+              </div>
+              <div class="pair" style="margin-top:8px;">
+                <input id="teamSize" value="2" placeholder="team size" />
+                <select id="timeoutTier">
+                  <option value="fast" selected>fast</option>
+                  <option value="standard">standard</option>
+                  <option value="deep">deep</option>
+                </select>
+              </div>
+              <label class="muted" style="margin-top:8px; display:block;">Idempotency Key (optional)</label>
+              <input id="idempotencyKey" placeholder="magic-run-key-001" />
+              <label class="muted" style="margin-top:8px; display:block;">
+                <input id="deterministic" type="checkbox" checked /> Deterministic output
+              </label>
             </div>
 
             <div class="card">
-              <h3>Pipeline Actions</h3>
+              <h3>Actions</h3>
               <div class="stack">
-                <button id="runPipeline" class="amber">Run Full Pipeline (Robust)</button>
-                <button id="runFusion" class="green">Run Fusion Leaderboard</button>
-                <button id="runScout">Scout Only</button>
-                <button id="runBenchmark" class="green">Benchmark Only</button>
-                <button id="runMasterpiece" class="ghost">Blueprint Only</button>
+                <button id="runMagic" class="green">Run Magic Run</button>
+                <button id="runMagicDemo" class="ghost">Load Demo Run</button>
+                <button id="refreshRunsPanel" class="amber">Refresh Run History</button>
               </div>
             </div>
 
             <div class="card">
-              <h3>Onboarding Wizard</h3>
-              <div class="muted">Set API key, GitHub token, and Postgres config, then verify automatically.</div>
-              <label class="muted" style="margin-top:8px; display:block;">GitHub Token (PAT)</label>
-              <input id="onboardGithubToken" type="password" placeholder="ghp_..." />
+              <h3>Proof Metrics</h3>
+              <div id="kpiGrid" class="kpi-grid">
+                <div class="kpi"><div class="k">timeToFirstWowMs</div><div class="v" id="kpiWow">-</div></div>
+                <div class="kpi"><div class="k">planHash</div><div class="v mono" id="kpiPlanHash">-</div></div>
+                <div class="kpi"><div class="k">qualityScore</div><div class="v" id="kpiQuality">-</div></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Recompile Diff</h3>
+              <label class="muted" style="display:block;">Run ID</label>
+              <input id="recompileRunId" placeholder="magic_..." />
               <div class="pair" style="margin-top:8px;">
-                <input id="onboardPgHost" value="127.0.0.1" placeholder="POSTGRES_HOST" />
-                <input id="onboardPgPort" value="5432" placeholder="POSTGRES_PORT" />
+                <input id="recompileBudgetUsd" placeholder="budget USD (optional)" />
+                <input id="recompileDeadlineDays" placeholder="deadline days (optional)" />
               </div>
               <div class="pair" style="margin-top:8px;">
-                <input id="onboardPgUser" value="postgres" placeholder="POSTGRES_USER" />
-                <input id="onboardPgDb" value="postgres" placeholder="POSTGRES_DB" />
-              </div>
-              <label class="muted" style="margin-top:8px; display:block;">Postgres Password</label>
-              <input id="onboardPgPassword" type="password" placeholder="POSTGRES_PASSWORD" />
-              <div class="pair" style="margin-top:8px;">
-                <label class="muted"><input id="onboardGenerateKey" type="checkbox" checked /> Generate API Key</label>
-                <label class="muted"><input id="onboardRunChecks" type="checkbox" checked /> Run checks</label>
+                <input id="recompileTeamSize" placeholder="team size (optional)" />
+                <input id="recompileNotes" placeholder="notes (optional)" />
               </div>
               <div class="stack" style="margin-top:10px;">
-                <button id="runOnboard" class="green">Save + Verify Setup</button>
-                <button id="refreshSetup" class="ghost">Refresh Setup Status</button>
+                <button id="runRecompile" class="amber">Run Recompile</button>
               </div>
-              <div id="setupOut" class="log mono" style="margin-top:10px;">Setup status not loaded.</div>
-            </div>
-
-            <div class="card">
-              <h3>Live KPIs</h3>
-              <div id="kpiGrid" class="kpi-grid">
-                <div class="kpi"><div class="k">Sessions</div><div class="v" id="kpiSessions">0</div></div>
-                <div class="kpi"><div class="k">Chats</div><div class="v" id="kpiChats">0</div></div>
-                <div class="kpi"><div class="k">Runs</div><div class="v" id="kpiRuns">0</div></div>
-                <div class="kpi"><div class="k">Last Provider</div><div class="v" id="kpiProvider">-</div></div>
-                <div class="kpi"><div class="k">Fusion Picks</div><div class="v" id="kpiFusion">0</div></div>
-              </div>
-            </div>
-
-            <div class="card">
-              <h3>Fusion Leaderboard</h3>
-              <div id="fusion" class="log mono">Run pipeline or click "Run Fusion Leaderboard".</div>
+              <div id="recompileDiff" class="log mono" style="margin-top:10px;">No recompile diff yet.</div>
             </div>
 
             <div class="card">
@@ -510,15 +502,13 @@ open source workflow automation dashboard</textarea>
     </div>
 
     <script>
-      let scoutRepos = [];
-      let benchmarkRepos = [];
       let activeSessionId = "";
       let localMessages = [];
+      let latestMagicRunId = "";
 
       const out = document.getElementById("out");
       const runs = document.getElementById("runs");
-      const fusion = document.getElementById("fusion");
-      const setupOut = document.getElementById("setupOut");
+      const recompileDiff = document.getElementById("recompileDiff");
       const sessionList = document.getElementById("sessionList");
       const chatRows = document.getElementById("chatRows");
       const chatState = document.getElementById("chatState");
@@ -560,9 +550,12 @@ open source workflow automation dashboard</textarea>
       }
 
       async function api(path, body) {
+        const savedKey = localStorage.getItem("builderbot_api_key") || "";
+        const headers = { "Content-Type": "application/json" };
+        if (savedKey) headers.Authorization = `Bearer ${savedKey}`;
         const res = await fetch(path, {
           method: body ? "POST" : "GET",
-          headers: { "Content-Type": "application/json" },
+          headers,
           body: body ? JSON.stringify(body) : undefined,
         });
         const data = await res.json();
@@ -570,76 +563,47 @@ open source workflow automation dashboard</textarea>
         return data;
       }
 
-      function collectConfig() {
+      function collectMagicConfig() {
         return {
-          queries: document.getElementById("queries").value.split("\n").map((s) => s.trim()).filter(Boolean),
-          minStars: Number(document.getElementById("minStars").value || 500),
-          topK: Number(document.getElementById("topK").value || 10),
-          productName: document.getElementById("productName").value,
-          userGoal: document.getElementById("goal").value,
+          productName: document.getElementById("productName").value.trim() || "InayanBuilder",
+          userGoal: document.getElementById("goal").value.trim(),
           stack: document.getElementById("stack").value.split(",").map((s) => s.trim()).filter(Boolean),
-        };
-      }
-
-      function collectOnboardConfig() {
-        return {
-          generateApiKey: document.getElementById("onboardGenerateKey").checked,
-          runChecks: document.getElementById("onboardRunChecks").checked,
-          githubToken: document.getElementById("onboardGithubToken").value.trim() || undefined,
-          postgres: {
-            host: document.getElementById("onboardPgHost").value.trim() || "127.0.0.1",
-            port: Number(document.getElementById("onboardPgPort").value || 5432),
-            user: document.getElementById("onboardPgUser").value.trim() || "postgres",
-            db: document.getElementById("onboardPgDb").value.trim() || "postgres",
-            password: document.getElementById("onboardPgPassword").value,
+          timeoutTier: document.getElementById("timeoutTier").value,
+          deterministic: document.getElementById("deterministic").checked,
+          idempotencyKey: document.getElementById("idempotencyKey").value.trim() || undefined,
+          constraints: {
+            budgetUsd: Number(document.getElementById("budgetUsd").value || 5000),
+            deadlineDays: Number(document.getElementById("deadlineDays").value || 14),
+            teamSize: Number(document.getElementById("teamSize").value || 2),
           },
         };
       }
 
-      async function refreshSetupStatus() {
-        try {
-          const data = await api("/api/v1/setup/status");
-          setupOut.textContent = JSON.stringify(data, null, 2);
-        } catch (e) {
-          setupOut.textContent = `setup_status_error: ${String(e)}`;
-        }
+      function setProofMetrics(payload) {
+        document.getElementById("kpiWow").textContent = payload?.timeToFirstWowMs != null
+          ? String(payload.timeToFirstWowMs)
+          : "-";
+        document.getElementById("kpiPlanHash").textContent = payload?.planHash || "-";
+        document.getElementById("kpiQuality").textContent = payload?.qualityScore != null
+          ? String(payload.qualityScore)
+          : "-";
       }
 
-      async function runOnboardingWizard() {
-        const payload = collectOnboardConfig();
-        if (!payload.postgres.password) {
-          setupOut.textContent = "Postgres password is required to save setup.";
-          return;
-        }
-        setupOut.textContent = "Running onboarding...";
-        try {
-          const data = await api("/api/v1/setup/onboard", payload);
-          setupOut.textContent = JSON.stringify(data, null, 2);
-          document.getElementById("onboardGithubToken").value = "";
-          document.getElementById("onboardPgPassword").value = "";
-        } catch (e) {
-          setupOut.textContent = `setup_onboard_error: ${String(e)}`;
-        }
-      }
-
-      async function refreshKPIs() {
-        try {
-          const [sessionData, historyData, runsData] = await Promise.all([
-            api("/api/v1/chat/sessions"),
-            api("/api/v1/chat/history"),
-            api("/api/v1/runs"),
-          ]);
-          document.getElementById("kpiSessions").textContent = String(sessionData.count || 0);
-          document.getElementById("kpiChats").textContent = String(historyData.count || 0);
-          document.getElementById("kpiRuns").textContent = String(runsData.count || 0);
-          const latest = (historyData.history || [])[0];
-          document.getElementById("kpiProvider").textContent = latest?.provider || "-";
-          const latestPipeline = (runsData.runs || []).find((r) => r.type === "pipeline");
-          const fusionCount = Number(latestPipeline?.output?.fusion?.summary?.leaderboard_count || 0);
-          document.getElementById("kpiFusion").textContent = String(fusionCount);
-        } catch {
-          // noop
-        }
+      function collectRecompilePayload() {
+        const runId = document.getElementById("recompileRunId").value.trim();
+        const budgetRaw = document.getElementById("recompileBudgetUsd").value.trim();
+        const deadlineRaw = document.getElementById("recompileDeadlineDays").value.trim();
+        const teamRaw = document.getElementById("recompileTeamSize").value.trim();
+        const notes = document.getElementById("recompileNotes").value.trim();
+        const constraints = {};
+        if (budgetRaw) constraints.budgetUsd = Number(budgetRaw);
+        if (deadlineRaw) constraints.deadlineDays = Number(deadlineRaw);
+        if (teamRaw) constraints.teamSize = Number(teamRaw);
+        return {
+          runId,
+          constraints,
+          notes: notes || undefined,
+        };
       }
 
       async function refreshSessions() {
@@ -661,7 +625,6 @@ open source workflow automation dashboard</textarea>
             };
             sessionList.appendChild(item);
           }
-          await refreshKPIs();
         } catch (e) {
           sessionList.innerHTML = `<div class="muted" style="padding:8px;">${String(e)}</div>`;
         }
@@ -725,9 +688,12 @@ open source workflow automation dashboard</textarea>
         renderMessages();
 
         try {
+          const savedKey = localStorage.getItem("builderbot_api_key") || "";
+          const headers = { "Content-Type": "application/json" };
+          if (savedKey) headers.Authorization = `Bearer ${savedKey}`;
           const response = await fetch("/api/v1/chat/reply/stream", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers,
             body: JSON.stringify({
               message,
               provider,
@@ -787,6 +753,21 @@ open source workflow automation dashboard</textarea>
         }
       }
 
+      async function refreshRunHistory() {
+        try {
+          const data = await api("/api/v1/runs");
+          runs.textContent = JSON.stringify(data, null, 2);
+          const latestMagic = (data.runs || []).find((r) => r.type === "magic_pipeline");
+          if (latestMagic?.id) {
+            latestMagicRunId = latestMagic.id;
+            document.getElementById("recompileRunId").value = latestMagicRunId;
+            setProofMetrics(latestMagic.output || {});
+          }
+        } catch (e) {
+          runs.textContent = String(e);
+        }
+      }
+
       document.getElementById("sendChat").onclick = () => sendChat({ stream: false });
       document.getElementById("sendChatStream").onclick = () => sendChat({ stream: true });
 
@@ -810,118 +791,64 @@ open source workflow automation dashboard</textarea>
         try {
           const data = await api("/api/v1/chat/history");
           out.textContent = JSON.stringify(data, null, 2);
-          await refreshKPIs();
         } catch (e) {
           out.textContent = String(e);
         }
       };
 
-      document.getElementById("refreshRuns").onclick = async () => {
-        try {
-          const data = await api("/api/v1/runs");
-          runs.textContent = JSON.stringify(data, null, 2);
-          await refreshKPIs();
-        } catch (e) {
-          runs.textContent = String(e);
-        }
-      };
-
+      document.getElementById("refreshRuns").onclick = refreshRunHistory;
+      document.getElementById("refreshRunsPanel").onclick = refreshRunHistory;
       document.getElementById("refreshSessions").onclick = refreshSessions;
 
-      document.getElementById("runPipeline").onclick = async () => {
-        out.textContent = "Running full robust pipeline...";
+      document.getElementById("runMagic").onclick = async () => {
+        out.textContent = "Running deterministic magic run...";
         try {
-          const cfg = collectConfig();
-          const data = await api("/api/v1/masterpiece/pipeline/run", {
-            ...cfg,
-            runExternal: true,
-          });
-          scoutRepos = data.scout || [];
-          benchmarkRepos = data.benchmark || [];
+          const data = await api("/api/v1/masterpiece/magic-run", collectMagicConfig());
           out.textContent = JSON.stringify(data, null, 2);
-          if (data.fusion) {
-            fusion.textContent = JSON.stringify(data.fusion, null, 2);
+          setProofMetrics(data);
+          if (data.runId) {
+            latestMagicRunId = data.runId;
+            document.getElementById("recompileRunId").value = data.runId;
           }
-          await refreshKPIs();
+          await refreshRunHistory();
         } catch (e) {
           out.textContent = String(e);
         }
       };
 
-      document.getElementById("runFusion").onclick = async () => {
-        fusion.textContent = "Running fusion leaderboard...";
+      document.getElementById("runMagicDemo").onclick = async () => {
+        out.textContent = "Loading deterministic demo run...";
         try {
-          const cfg = collectConfig();
-          const data = await api("/api/v1/research/fusion", {
-            topK: Math.max(5, Number(cfg.topK || 10)),
-            useLatestRuns: true,
-          });
-          fusion.textContent = JSON.stringify(data, null, 2);
-          await refreshKPIs();
-        } catch (e) {
-          fusion.textContent = String(e);
-        }
-      };
-
-      document.getElementById("runScout").onclick = async () => {
-        out.textContent = "Running scout...";
-        try {
-          const cfg = collectConfig();
-          const data = await api("/api/v1/scout/run", {
-            queries: cfg.queries,
-            minStars: cfg.minStars,
-            topK: cfg.topK,
-            perQuery: 15,
-          });
-          scoutRepos = data.repos || [];
+          const data = await api("/api/v1/masterpiece/magic-run/demo");
           out.textContent = JSON.stringify(data, null, 2);
+          setProofMetrics(data);
         } catch (e) {
           out.textContent = String(e);
         }
       };
 
-      document.getElementById("runBenchmark").onclick = async () => {
-        out.textContent = "Running benchmark...";
-        if (!scoutRepos.length) return (out.textContent = "Run scout first.");
+      document.getElementById("runRecompile").onclick = async () => {
+        const payload = collectRecompilePayload();
+        if (!payload.runId) {
+          recompileDiff.textContent = "Run ID is required for recompile.";
+          return;
+        }
+        recompileDiff.textContent = "Running recompile...";
         try {
-          const data = await api("/api/v1/benchmark/run", { repos: scoutRepos });
-          benchmarkRepos = data.ranked || [];
+          const data = await api("/api/v1/masterpiece/recompile", payload);
+          recompileDiff.textContent = JSON.stringify(data.diff || data, null, 2);
+          setProofMetrics(data);
           out.textContent = JSON.stringify(data, null, 2);
+          await refreshRunHistory();
         } catch (e) {
-          out.textContent = String(e);
+          recompileDiff.textContent = String(e);
         }
       };
-
-      document.getElementById("runMasterpiece").onclick = async () => {
-        out.textContent = "Generating masterpiece blueprint...";
-        const cfg = collectConfig();
-        const selected = (benchmarkRepos.length ? benchmarkRepos : scoutRepos).slice(0, 6).map((r) => ({
-          full_name: r.full_name,
-          benchmarkScore: r.benchmarkScore,
-        }));
-        if (!selected.length) return (out.textContent = "Run scout/benchmark first.");
-        try {
-          const data = await api("/api/v1/masterpiece/build", {
-            productName: cfg.productName,
-            userGoal: cfg.userGoal,
-            selectedRepos: selected,
-            stack: cfg.stack,
-          });
-          out.textContent = JSON.stringify(data, null, 2);
-        } catch (e) {
-          out.textContent = String(e);
-        }
-      };
-
-      document.getElementById("runOnboard").onclick = runOnboardingWizard;
-      document.getElementById("refreshSetup").onclick = refreshSetupStatus;
 
       // Boot
       renderMessages();
       refreshSessions();
-      refreshKPIs();
-      refreshSetupStatus();
-      document.getElementById("refreshRuns").click();
+      refreshRunHistory();
     </script>
   </body>
 </html>
