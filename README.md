@@ -123,6 +123,7 @@ npm run lint
 npm run security:check
 npm run mcp:health
 npm test
+npm run test:e2e
 ```
 
 macOS shortcut: double-click `launch.command`.
@@ -236,6 +237,7 @@ Core:
 - `MAGIC_RUN_MAX_BUDGET_USD` (optional cap)
 - `SQLITE_INDEX_ENABLED` (`1` by default)
 - `INAYAN_DB_PATH` (default: `.data/inayan-index.db`)
+- `INAYAN_E2E_MOCK_MODE` (`1` only for deterministic local/CI Playwright runs)
 
 GitHub:
 - `GITHUB_TOKEN`
