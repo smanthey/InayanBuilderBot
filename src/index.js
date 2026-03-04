@@ -32,6 +32,8 @@ const appState = {
 
 const MAGIC_RUN_SCOUT_CACHE = new Map();
 const MAGIC_RUN_BENCH_CACHE = new Map();
+const PIPELINE_GITHUB_CACHE = new Map();
+const PIPELINE_REDDIT_CACHE = new Map();
 const MAGIC_RUN_CACHE_TTL_MS = Number(process.env.MAGIC_RUN_CACHE_TTL_MS || 10 * 60 * 1000);
 const MAGIC_RUN_MAX_BUDGET_USD = Number(process.env.MAGIC_RUN_MAX_BUDGET_USD || 25000);
 
@@ -2907,30 +2909,72 @@ export function createApp() {
         p?.github?.query
         || `${p.productName} ${p.userGoal} ${p.queries.join(" ")}`
       ).slice(0, 300);
+      const githubCacheKey = deterministicHash({
+        stage: "github_research",
+        githubQuery,
+        perPage: Number(p?.github?.perPage || 20),
+        maxResults: Number(p?.github?.maxResults || 40),
+      });
       try {
-        githubReport = await runGithubResearch({
-          query: githubQuery,
-          perPage: Number(p?.github?.perPage || 20),
-          maxResults: Number(p?.github?.maxResults || 40),
-          githubToken: GITHUB_TOKEN,
-        });
+        githubReport = getCache(PIPELINE_GITHUB_CACHE, githubCacheKey);
+        let cached = true;
+        if (!githubReport) {
+          cached = false;
+          githubReport = await runGithubResearch({
+            query: githubQuery,
+            perPage: Number(p?.github?.perPage || 20),
+            maxResults: Number(p?.github?.maxResults || 40),
+            githubToken: GITHUB_TOKEN,
+          });
+          setCache(PIPELINE_GITHUB_CACHE, githubCacheKey, githubReport);
+        }
         stageResults.push({
           stage: "github_research",
           ok: true,
           detail: {
             query: githubQuery,
+            cached,
             repo_hits: Number(githubReport?.summary?.repo_hits || 0),
             answer_hits: Number(githubReport?.summary?.answer_hits || 0),
           },
         });
       } catch (err) {
-        stageResults.push({
-          stage: "github_research",
-          ok: false,
-          detail: {
-            error: String(err?.message || err),
-          },
-        });
+        try {
+          const fallbackQuery = String(p.queries?.[0] || p.productName || "ai builder").slice(0, 120);
+          githubReport = await runGithubResearch({
+            query: fallbackQuery,
+            perPage: 12,
+            maxResults: 24,
+            githubToken: GITHUB_TOKEN,
+          });
+          const fallbackKey = deterministicHash({
+            stage: "github_research",
+            githubQuery: fallbackQuery,
+            perPage: 12,
+            maxResults: 24,
+          });
+          setCache(PIPELINE_GITHUB_CACHE, fallbackKey, githubReport);
+          stageResults.push({
+            stage: "github_research",
+            ok: true,
+            detail: {
+              query: githubQuery,
+              fallback_query: fallbackQuery,
+              degraded: true,
+              repo_hits: Number(githubReport?.summary?.repo_hits || 0),
+              answer_hits: Number(githubReport?.summary?.answer_hits || 0),
+            },
+          });
+        } catch (fallbackErr) {
+          stageResults.push({
+            stage: "github_research",
+            ok: false,
+            detail: {
+              error: String(err?.message || err),
+              fallback_error: String(fallbackErr?.message || fallbackErr),
+            },
+          });
+        }
       }
     }
 
@@ -2942,22 +2986,37 @@ export function createApp() {
       const redditSubreddits = Array.isArray(p?.reddit?.subreddits) && p.reddit.subreddits.length
         ? p.reddit.subreddits
         : REDDIT_DEFAULT_SUBREDDITS;
+      const redditCacheKey = deterministicHash({
+        stage: "reddit_research",
+        redditQuery,
+        redditSubreddits,
+        limitPerSubreddit: Number(p?.reddit?.limitPerSubreddit || 25),
+        timeWindow: String(p?.reddit?.timeWindow || "year"),
+        maxResults: Number(p?.reddit?.maxResults || 60),
+      });
       try {
-        redditReport = await runRedditResearch({
-          query: redditQuery,
-          subreddits: redditSubreddits,
-          limitPerSubreddit: Number(p?.reddit?.limitPerSubreddit || 25),
-          timeWindow: String(p?.reddit?.timeWindow || "year"),
-          maxResults: Number(p?.reddit?.maxResults || 60),
-          redditUserAgent: REDDIT_USER_AGENT,
-          redditAuthProfiles,
-          redditRequestTimeoutMs: REDDIT_REQUEST_TIMEOUT_MS,
-        });
+        redditReport = getCache(PIPELINE_REDDIT_CACHE, redditCacheKey);
+        let cached = true;
+        if (!redditReport) {
+          cached = false;
+          redditReport = await runRedditResearch({
+            query: redditQuery,
+            subreddits: redditSubreddits,
+            limitPerSubreddit: Number(p?.reddit?.limitPerSubreddit || 25),
+            timeWindow: String(p?.reddit?.timeWindow || "year"),
+            maxResults: Number(p?.reddit?.maxResults || 60),
+            redditUserAgent: REDDIT_USER_AGENT,
+            redditAuthProfiles,
+            redditRequestTimeoutMs: REDDIT_REQUEST_TIMEOUT_MS,
+          });
+          setCache(PIPELINE_REDDIT_CACHE, redditCacheKey, redditReport);
+        }
         stageResults.push({
           stage: "reddit_research",
           ok: true,
           detail: {
             query: redditQuery,
+            cached,
             indexed_posts: Number(redditReport?.summary?.indexed_posts || 0),
             source_errors: Array.isArray(redditReport?.summary?.source_errors) ? redditReport.summary.source_errors.length : 0,
           },

@@ -184,6 +184,7 @@ Output quality is enforced by design:
 - auto-repair for failing quality criteria
 - request caps for budget and timeout tiering (`fast`, `standard`, `deep`)
 - idempotency key replay support
+- pipeline-stage caching for GitHub/Reddit research to speed repeat runs
 
 ## Project Memory (Continuity)
 
