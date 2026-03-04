@@ -109,6 +109,8 @@ test("pipeline run works with seed repos and runExternal=false", async () => {
       minStars: 500,
       topK: 5,
       runExternal: false,
+      runGithubResearch: false,
+      runRedditResearch: false,
       seedRepos,
     })
   });
@@ -167,6 +169,8 @@ test("pipeline run includes builtin advanced indexing when enabled", async () =>
       minStars: 500,
       topK: 5,
       runExternal: true,
+      runGithubResearch: false,
+      runRedditResearch: false,
       seedRepos,
     }),
   });
@@ -303,11 +307,12 @@ test("pipeline includes reddit_research stage", async () => {
         stack: ["Node.js", "Express", "React"],
         queries: ["dashboard chat ui"],
         minStars: 500,
-        topK: 5,
-        runExternal: false,
-        runRedditResearch: true,
-        reddit: { query: "dashboard chat ui", subreddits: ["AI_Agents"], maxResults: 20 },
-        seedRepos,
+      topK: 5,
+      runExternal: false,
+      runGithubResearch: false,
+      runRedditResearch: true,
+      reddit: { query: "dashboard chat ui", subreddits: ["AI_Agents"], maxResults: 20 },
+      seedRepos,
       }),
     });
 
@@ -318,6 +323,164 @@ test("pipeline includes reddit_research stage", async () => {
     assert.equal(Boolean(redditStage), true);
     assert.equal(redditStage.ok, true);
     assert.equal(Number(body.blueprint?.summary?.reddit_indexed_posts || 0) > 0, true);
+  } finally {
+    global.fetch = originalFetch;
+    server.close();
+  }
+});
+
+test("github research endpoint returns repo and answer intelligence", async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async (url, options = {}) => {
+    const target = String(url || "");
+    if (target.includes("/search/repositories")) {
+      return new Response(
+        JSON.stringify({
+          items: [
+            {
+              full_name: "acme/agent-dashboard",
+              html_url: "https://github.com/acme/agent-dashboard",
+              description: "Dashboard chat ui agent app",
+              stargazers_count: 2100,
+              forks_count: 230,
+              language: "TypeScript",
+              topics: ["dashboard", "chat", "agent"],
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (target.includes("/search/issues")) {
+      return new Response(
+        JSON.stringify({
+          items: [
+            {
+              title: "How to stream chat in dashboard?",
+              html_url: "https://github.com/acme/agent-dashboard/issues/42",
+              repository_url: "https://api.github.com/repos/acme/agent-dashboard",
+              comments: 12,
+              updated_at: new Date().toISOString(),
+              body: "Try this approach:\\n```ts\\napp.post('/chat', handler)\\n```",
+              reactions: { total_count: 5 },
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    return originalFetch(url, options);
+  };
+
+  const app = createApp();
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once("listening", resolve));
+  try {
+    const address = server.address();
+    const port = typeof address === "object" && address ? address.port : 0;
+    const response = await originalFetch(`http://127.0.0.1:${port}/api/v1/github/research`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query: "dashboard chat ui",
+        perPage: 10,
+        maxResults: 10,
+      }),
+    });
+    const body = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, true);
+    assert.equal(Number(body.summary.repo_hits), 1);
+    assert.equal(Number(body.summary.answer_hits), 1);
+    assert.equal(Array.isArray(body.answers[0].code_snippets), true);
+  } finally {
+    global.fetch = originalFetch;
+    server.close();
+  }
+});
+
+test("pipeline includes github_research stage", async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async (url, options = {}) => {
+    const target = String(url || "");
+    if (target.includes("/search/repositories")) {
+      return new Response(
+        JSON.stringify({
+          items: [
+            {
+              full_name: "acme/agent-dashboard-chat",
+              html_url: "https://github.com/acme/agent-dashboard-chat",
+              description: "agent dashboard chat",
+              stargazers_count: 2200,
+              forks_count: 200,
+              language: "TypeScript",
+              topics: ["dashboard", "chat"],
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (target.includes("/search/issues")) {
+      return new Response(
+        JSON.stringify({
+          items: [
+            {
+              title: "Need code example for chat route",
+              html_url: "https://github.com/acme/agent-dashboard-chat/issues/7",
+              repository_url: "https://api.github.com/repos/acme/agent-dashboard-chat",
+              comments: 6,
+              updated_at: new Date().toISOString(),
+              body: "Use\\n```js\\nrouter.post('/api/v1/chat/reply', fn)\\n```",
+              reactions: { total_count: 2 },
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    return originalFetch(url, options);
+  };
+
+  const app = createApp();
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once("listening", resolve));
+  try {
+    const address = server.address();
+    const port = typeof address === "object" && address ? address.port : 0;
+    const response = await originalFetch(`http://127.0.0.1:${port}/api/v1/masterpiece/pipeline/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        productName: "Inaya Github Pipeline Product",
+        userGoal: "Build dashboard chat from proven community code.",
+        stack: ["Node.js", "Express", "React"],
+        queries: ["dashboard chat ui"],
+        minStars: 500,
+        topK: 5,
+        runExternal: false,
+        runGithubResearch: true,
+        runRedditResearch: false,
+        github: { query: "dashboard chat ui", perPage: 10, maxResults: 10 },
+        seedRepos: [
+          {
+            full_name: "acme/agent-dashboard-chat",
+            name: "agent-dashboard-chat",
+            description: "dashboard and chat app for ai agents",
+            stargazers_count: 3500,
+            forks_count: 400,
+            topics: ["dashboard", "chat", "ai"],
+            pushed_at: new Date().toISOString(),
+          },
+        ],
+      }),
+    });
+    const body = await response.json();
+    assert.equal(response.status, 200);
+    const githubStage = body.stageResults.find((s) => s.stage === "github_research");
+    assert.equal(Boolean(githubStage), true);
+    assert.equal(githubStage.ok, true);
+    assert.equal(Number(body.blueprint?.summary?.github_answer_hits || 0) > 0, true);
   } finally {
     global.fetch = originalFetch;
     server.close();

@@ -304,6 +304,114 @@ async function githubSearch({ query, perPage, githubToken }) {
   return Array.isArray(data.items) ? data.items : [];
 }
 
+async function githubIssueSearch({ query, perPage, githubToken }) {
+  const headers = {
+    Accept: "application/vnd.github+json",
+    "User-Agent": "inayanbuilderbot-masterpiece",
+  };
+  if (githubToken) headers.Authorization = `Bearer ${githubToken}`;
+
+  const q = `${query} in:title,body is:issue -is:pr`;
+  const url = `https://api.github.com/search/issues?q=${encodeURIComponent(q)}&sort=comments&order=desc&per_page=${Math.max(1, Math.min(30, perPage))}`;
+  const r = await fetch(url, { headers });
+  if (!r.ok) {
+    const body = await r.text();
+    throw new Error(`github_issue_search_failed:${r.status}:${body.slice(0, 200)}`);
+  }
+  const data = await r.json();
+  return Array.isArray(data.items) ? data.items : [];
+}
+
+function extractCodeSnippetsFromMarkdown(markdown, maxSnippets = 2, maxChars = 420) {
+  const text = String(markdown || "");
+  const blocks = [];
+  const regex = /```[a-zA-Z0-9_-]*\n([\s\S]*?)```/g;
+  let match = regex.exec(text);
+  while (match && blocks.length < maxSnippets) {
+    const body = String(match[1] || "").trim();
+    if (body) blocks.push(body.slice(0, maxChars));
+    match = regex.exec(text);
+  }
+  return blocks;
+}
+
+function scoreGithubAnswer(item, queryTokens = []) {
+  const title = String(item?.title || "");
+  const body = String(item?.body || "");
+  const text = `${title}\n${body}`.toLowerCase();
+  const termHits = queryTokens.filter((t) => text.includes(t)).length;
+  const comments = Number(item?.comments || 0);
+  const reactions = Number(item?.reactions?.total_count || 0);
+  const freshnessDays = Math.max(
+    0,
+    (Date.now() - (Date.parse(item?.updated_at || item?.created_at || 0) || 0)) / 86400000
+  );
+  const freshness = Math.max(0, 18 - Math.min(18, freshnessDays / 14));
+  const score = Math.round((Math.log10(Math.max(1, comments + 1)) * 28 + Math.log10(Math.max(1, reactions + 1)) * 24 + termHits * 8 + freshness) * 100) / 100;
+  return {
+    rank_score: score,
+    matched_terms: queryTokens.filter((t) => text.includes(t)).slice(0, 10),
+  };
+}
+
+async function runGithubResearch({
+  query,
+  perPage = 20,
+  maxResults = 40,
+  githubToken,
+}) {
+  const queryTokens = [...new Set(tokenizeSearchText(query))].slice(0, 24);
+  const [repos, issues] = await Promise.all([
+    githubSearch({ query, perPage, githubToken }),
+    githubIssueSearch({ query, perPage, githubToken }),
+  ]);
+
+  const repoResults = repos.slice(0, maxResults).map((repo) => {
+    const scored = scoreRepo(repo);
+    return {
+      full_name: repo.full_name,
+      html_url: repo.html_url,
+      description: repo.description || "",
+      stars: Number(repo.stargazers_count || 0),
+      forks: Number(repo.forks_count || 0),
+      language: repo.language || null,
+      topics: Array.isArray(repo.topics) ? repo.topics : [],
+      uiEvidence: scored.uiEvidence,
+      score: scored.score,
+    };
+  });
+
+  const answerRows = issues
+    .map((it) => {
+      const s = scoreGithubAnswer(it, queryTokens);
+      return {
+        title: it.title || "",
+        html_url: it.html_url || "",
+        repository_url: it.repository_url || "",
+        comments: Number(it.comments || 0),
+        updated_at: it.updated_at || null,
+        rank_score: s.rank_score,
+        matched_terms: s.matched_terms,
+        code_snippets: extractCodeSnippetsFromMarkdown(it.body || "", 2, 420),
+      };
+    })
+    .sort((a, b) => Number(b.rank_score || 0) - Number(a.rank_score || 0))
+    .slice(0, maxResults);
+
+  return {
+    summary: {
+      generated_at: new Date().toISOString(),
+      query,
+      repo_hits: repoResults.length,
+      answer_hits: answerRows.length,
+      top_terms: queryTokens,
+      github_token_configured: Boolean(githubToken),
+    },
+    repos: repoResults,
+    answers: answerRows,
+  };
+}
+
 function computeUiEvidence(repo) {
   const text = `${repo.name || ""} ${repo.description || ""} ${(repo.topics || []).join(" ")} ${(repo.signals || []).join(" ")} ${(repo.categories || []).join(" ")}`.toLowerCase();
   const checks = [
@@ -518,6 +626,7 @@ function collectRepoIntelContext({ latestPipeline, allRuns, clawArchitectRoot })
   const latestScout = allRuns.find((r) => r.type === "scout");
   const latestBench = allRuns.find((r) => r.type === "benchmark");
   const latestReddit = allRuns.find((r) => r.type === "reddit_research");
+  const latestGithubResearch = allRuns.find((r) => r.type === "github_research");
 
   const pipelineRepos = Array.isArray(latestPipeline?.output?.blueprint?.selectedRepos)
     ? latestPipeline.output.blueprint.selectedRepos.map((r) => r.full_name).slice(0, 8)
@@ -563,6 +672,13 @@ function collectRepoIntelContext({ latestPipeline, allRuns, clawArchitectRoot })
         subreddit: r.subreddit,
         rank_score: r.rank_score,
         permalink: r.permalink || r.url,
+      }))
+      : [],
+    github_top_answers: Array.isArray(latestGithubResearch?.output?.answers)
+      ? latestGithubResearch.output.answers.slice(0, 8).map((a) => ({
+        title: a.title,
+        rank_score: a.rank_score,
+        html_url: a.html_url,
       }))
       : [],
     external: externalIntel,
@@ -1318,7 +1434,13 @@ const PipelineSchema = z.object({
   minStars: z.number().int().min(100).max(500000).default(500),
   topK: z.number().int().min(3).max(30).default(10),
   runExternal: z.boolean().default(true),
+  runGithubResearch: z.boolean().default(true),
   runRedditResearch: z.boolean().default(true),
+  github: z.object({
+    query: z.string().min(2).max(300).optional(),
+    perPage: z.number().int().min(5).max(30).default(20),
+    maxResults: z.number().int().min(5).max(120).default(40),
+  }).optional(),
   reddit: z.object({
     query: z.string().min(2).max(300).optional(),
     subreddits: z.array(z.string().min(2).max(60)).min(1).max(30).optional(),
@@ -1335,6 +1457,12 @@ const RedditSearchSchema = z.object({
   limitPerSubreddit: z.number().int().min(3).max(100).default(25),
   timeWindow: z.string().min(1).max(20).default("year"),
   maxResults: z.number().int().min(5).max(200).default(60),
+});
+
+const GithubResearchSchema = z.object({
+  query: z.string().min(2).max(300),
+  perPage: z.number().int().min(5).max(30).default(20),
+  maxResults: z.number().int().min(5).max(120).default(40),
 });
 
 const ChatSchema = z.object({
@@ -1508,6 +1636,59 @@ export function createApp() {
       return res.status(502).json({ ok: false, error: "dashboard_scout_failed", detail: result.error || result.stderr_tail || "dashboard_scout_failed", result });
     }
     return res.json({ ok: true, task: "dashboard_scout", params: p, result });
+  });
+
+  app.get("/api/v1/github/capabilities", requireAuth, (_req, res) => {
+    return res.json({
+      ok: true,
+      github: {
+        enabled: true,
+        tokenConfigured: Boolean(GITHUB_TOKEN),
+        endpoints: {
+          repo_search: "/search/repositories",
+          issue_search: "/search/issues",
+        },
+      },
+    });
+  });
+
+  app.post("/api/v1/github/research", requireAuth, async (req, res) => {
+    const parsed = GithubResearchSchema.safeParse(req.body || {});
+    if (!parsed.success) return res.status(400).json({ ok: false, error: "invalid_request", details: parsed.error.flatten() });
+
+    try {
+      const p = parsed.data;
+      const report = await runGithubResearch({
+        query: p.query,
+        perPage: p.perPage,
+        maxResults: p.maxResults,
+        githubToken: GITHUB_TOKEN,
+      });
+      const run = {
+        id: nowId("github"),
+        type: "github_research",
+        createdAt: new Date().toISOString(),
+        payload: p,
+        output: report,
+      };
+      appState.runs.unshift(run);
+      trimHistory();
+      persistDataStore();
+
+      return res.json({
+        ok: true,
+        runId: run.id,
+        summary: report.summary,
+        repos: report.repos,
+        answers: report.answers,
+      });
+    } catch (err) {
+      return res.status(500).json({
+        ok: false,
+        error: "github_research_failed",
+        detail: String(err?.message || err),
+      });
+    }
   });
 
   app.get("/api/v1/reddit/capabilities", requireAuth, (_req, res) => {
@@ -1700,6 +1881,7 @@ export function createApp() {
     const runId = nowId("pipeline");
     const startedAt = new Date().toISOString();
     const stageResults = [];
+    let githubReport = null;
     let redditReport = null;
 
     const scoutPayload = {
@@ -1799,6 +1981,38 @@ export function createApp() {
       }
     }
 
+    if (p.runGithubResearch) {
+      const githubQuery = String(
+        p?.github?.query
+        || `${p.productName} ${p.userGoal} ${p.queries.join(" ")}`
+      ).slice(0, 300);
+      try {
+        githubReport = await runGithubResearch({
+          query: githubQuery,
+          perPage: Number(p?.github?.perPage || 20),
+          maxResults: Number(p?.github?.maxResults || 40),
+          githubToken: GITHUB_TOKEN,
+        });
+        stageResults.push({
+          stage: "github_research",
+          ok: true,
+          detail: {
+            query: githubQuery,
+            repo_hits: Number(githubReport?.summary?.repo_hits || 0),
+            answer_hits: Number(githubReport?.summary?.answer_hits || 0),
+          },
+        });
+      } catch (err) {
+        stageResults.push({
+          stage: "github_research",
+          ok: false,
+          detail: {
+            error: String(err?.message || err),
+          },
+        });
+      }
+    }
+
     if (p.runRedditResearch) {
       const redditQuery = String(
         p?.reddit?.query
@@ -1852,9 +2066,21 @@ export function createApp() {
       summary: {
         scout_count: scoutRepos.length,
         benchmark_count: benchmarkRanked.length,
+        github_repo_hits: Number(githubReport?.summary?.repo_hits || 0),
+        github_answer_hits: Number(githubReport?.summary?.answer_hits || 0),
         reddit_indexed_posts: Number(redditReport?.summary?.indexed_posts || 0),
         external_stages: stageResults.filter((s) => s.stage.startsWith("external_")).length,
       },
+      githubAnswerTop: Array.isArray(githubReport?.answers)
+        ? githubReport.answers.slice(0, 8).map((a) => ({
+          title: a.title,
+          rank_score: a.rank_score,
+          html_url: a.html_url,
+          code_snippet_preview: Array.isArray(a.code_snippets) && a.code_snippets.length
+            ? String(a.code_snippets[0]).slice(0, 180)
+            : "",
+        }))
+        : [],
       redditSignalTop: Array.isArray(redditReport?.results)
         ? redditReport.results.slice(0, 8).map((r) => ({
           title: r.title,
@@ -1866,7 +2092,9 @@ export function createApp() {
       generatedAt: new Date().toISOString(),
     };
 
-    const ok = stageResults.every((s) => s.ok || s.stage.startsWith("external_") || s.stage === "reddit_research");
+    const ok = stageResults.every(
+      (s) => s.ok || s.stage.startsWith("external_") || s.stage === "reddit_research" || s.stage === "github_research"
+    );
     const run = {
       id: runId,
       type: "pipeline",
@@ -1877,6 +2105,7 @@ export function createApp() {
         stageResults,
         scout: scoutRepos,
         benchmark: benchmarkRanked,
+        github: githubReport,
         reddit: redditReport,
         blueprint,
       },
@@ -1886,7 +2115,16 @@ export function createApp() {
     trimHistory();
     persistDataStore();
 
-    return res.json({ ok, runId, stageResults, scout: scoutRepos, benchmark: benchmarkRanked, reddit: redditReport, blueprint });
+    return res.json({
+      ok,
+      runId,
+      stageResults,
+      scout: scoutRepos,
+      benchmark: benchmarkRanked,
+      github: githubReport,
+      reddit: redditReport,
+      blueprint,
+    });
   });
 
   const redactSensitiveError = (value) => String(value || "")
