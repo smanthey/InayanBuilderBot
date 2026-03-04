@@ -1,98 +1,286 @@
 {
-  "generatedAt": "2026-03-04T08:00:00Z",
+  "generatedAt": "2026-03-04T09:58:04.353Z",
   "source": "curated-external-open-source",
-  "notes": "Prioritizes proven dashboard/chat UI repositories with active maintenance and deployable products.",
+  "notes": "Prioritizes proven dashboard/chat UI repositories with active maintenance and deployable products. Includes viral OSS benchmarks (Claude Code, Cline, Chrome DevTools MCP, Nanobot, Zen MCP) from Reddit/GitHub research for builder-bot qualification and community trends. Also tracks MCP ecosystem leaders (awesome-mcp-servers, context7, playwright-mcp, github-mcp-server, fastmcp) for viral benchmark relevance. Refreshed with GitHub metadata and latest release tags.",
   "repos": [
     {
       "full_name": "open-webui/open-webui",
       "name": "open-webui",
       "html_url": "https://github.com/open-webui/open-webui",
       "description": "User-friendly AI Interface (Supports Ollama, OpenAI API, ...)",
-      "stars": 125658,
-      "forks": 17783,
+      "stars": 125677,
+      "forks": 17784,
       "language": "Python",
       "pushed_at": "2026-03-04T01:22:42Z",
-      "topics": ["llm-ui", "llm-webui", "mcp", "self-hosted", "openai", "rag"],
-      "categories": ["chat_ui", "dashboard", "self_hosted"],
-      "signals": ["proven_dashboard_chat_ui", "multi_provider", "mcp", "production_ready"]
+      "topics": [
+        "ai",
+        "llm",
+        "llm-ui",
+        "llm-webui",
+        "llms",
+        "mcp",
+        "ollama",
+        "ollama-webui",
+        "open-webui",
+        "openai",
+        "openapi",
+        "rag",
+        "self-hosted",
+        "ui",
+        "webui"
+      ],
+      "categories": [
+        "chat_ui",
+        "dashboard",
+        "self_hosted"
+      ],
+      "signals": [
+        "proven_dashboard_chat_ui",
+        "multi_provider",
+        "mcp",
+        "production_ready"
+      ],
+      "latest_release_tag": "v0.8.8",
+      "latest_release_published_at": "2026-03-02T23:33:56Z"
     },
     {
       "full_name": "danny-avila/LibreChat",
       "name": "LibreChat",
       "html_url": "https://github.com/danny-avila/LibreChat",
       "description": "Enhanced ChatGPT Clone with agents, MCP, multi-model routing, and secure self-hosting.",
-      "stars": 34311,
-      "forks": 6932,
+      "stars": 34315,
+      "forks": 6933,
       "language": "TypeScript",
       "pushed_at": "2026-03-04T04:48:52Z",
-      "topics": ["chatgpt", "webui", "deepseek", "anthropic", "gemini", "openai", "mcp"],
-      "categories": ["chat_ui", "dashboard", "self_hosted"],
-      "signals": ["proven_dashboard_chat_ui", "multi_provider", "mcp", "production_ready"]
+      "topics": [
+        "ai",
+        "anthropic",
+        "artifacts",
+        "aws",
+        "azure",
+        "chatgpt",
+        "chatgpt-clone",
+        "claude",
+        "clone",
+        "deepseek",
+        "gemini",
+        "google",
+        "gpt-5",
+        "librechat",
+        "mcp",
+        "o1",
+        "openai",
+        "responses-api",
+        "vision",
+        "webui"
+      ],
+      "categories": [
+        "chat_ui",
+        "dashboard",
+        "self_hosted"
+      ],
+      "signals": [
+        "proven_dashboard_chat_ui",
+        "multi_provider",
+        "mcp",
+        "production_ready"
+      ]
     },
     {
       "full_name": "lobehub/lobehub",
       "name": "lobehub",
       "html_url": "https://github.com/lobehub/lobehub",
       "description": "Agent collaboration workspace with rich chat UX and multi-model support.",
-      "stars": 73021,
-      "forks": 14719,
+      "stars": 73024,
+      "forks": 14721,
       "language": "TypeScript",
-      "pushed_at": "2026-03-04T07:26:14Z",
-      "topics": ["agent", "chatgpt", "claude", "deepseek", "gemini", "openai", "mcp"],
-      "categories": ["chat_ui", "dashboard", "agent_workspace"],
-      "signals": ["proven_dashboard_chat_ui", "multi_provider", "mcp", "production_ready"]
+      "pushed_at": "2026-03-04T09:40:40Z",
+      "topics": [
+        "agent",
+        "agent-collaboration",
+        "agent-harness",
+        "ai",
+        "chatgpt",
+        "claude",
+        "deepseek",
+        "gemini",
+        "gpt",
+        "knowledge-base",
+        "mcp",
+        "openai"
+      ],
+      "categories": [
+        "chat_ui",
+        "dashboard",
+        "agent_workspace"
+      ],
+      "signals": [
+        "proven_dashboard_chat_ui",
+        "multi_provider",
+        "mcp",
+        "production_ready"
+      ],
+      "latest_release_tag": "v2.1.35",
+      "latest_release_published_at": "2026-03-03T12:08:01Z"
     },
     {
       "full_name": "langgenius/dify",
       "name": "dify",
       "html_url": "https://github.com/langgenius/dify",
       "description": "Production-ready platform for agentic workflow development.",
-      "stars": 131124,
-      "forks": 20410,
+      "stars": 131145,
+      "forks": 20417,
       "language": "TypeScript",
-      "pushed_at": "2026-03-04T07:54:01Z",
-      "topics": ["agent", "workflow", "mcp", "nextjs", "openai", "gemini"],
-      "categories": ["dashboard", "agent_builder", "workflow"],
-      "signals": ["proven_dashboard_chat_ui", "multi_provider", "mcp", "production_ready"]
+      "pushed_at": "2026-03-04T09:51:34Z",
+      "topics": [
+        "agent",
+        "agentic-ai",
+        "agentic-framework",
+        "agentic-workflow",
+        "ai",
+        "automation",
+        "gemini",
+        "genai",
+        "gpt",
+        "gpt-4",
+        "llm",
+        "low-code",
+        "mcp",
+        "nextjs",
+        "no-code",
+        "openai",
+        "orchestration",
+        "python",
+        "rag",
+        "workflow"
+      ],
+      "categories": [
+        "dashboard",
+        "agent_builder",
+        "workflow"
+      ],
+      "signals": [
+        "proven_dashboard_chat_ui",
+        "multi_provider",
+        "mcp",
+        "production_ready"
+      ],
+      "latest_release_tag": "1.13.0",
+      "latest_release_published_at": "2026-02-11T09:24:39Z"
     },
     {
       "full_name": "FlowiseAI/Flowise",
       "name": "Flowise",
       "html_url": "https://github.com/FlowiseAI/Flowise",
       "description": "Build AI agents visually with production-oriented chat and workflow UI.",
-      "stars": 49748,
-      "forks": 23820,
+      "stars": 49751,
+      "forks": 23822,
       "language": "TypeScript",
       "pushed_at": "2026-03-04T02:13:32Z",
-      "topics": ["chatbot", "agents", "langchain", "react", "workflow-automation"],
-      "categories": ["dashboard", "agent_builder", "workflow"],
-      "signals": ["proven_dashboard_chat_ui", "multi_provider", "production_ready"]
+      "topics": [
+        "agentic-ai",
+        "agentic-workflow",
+        "agents",
+        "artificial-intelligence",
+        "chatbot",
+        "chatgpt",
+        "javascript",
+        "langchain",
+        "large-language-models",
+        "low-code",
+        "multiagent-systems",
+        "no-code",
+        "openai",
+        "rag",
+        "react",
+        "typescript",
+        "workflow-automation"
+      ],
+      "categories": [
+        "dashboard",
+        "agent_builder",
+        "workflow"
+      ],
+      "signals": [
+        "proven_dashboard_chat_ui",
+        "multi_provider",
+        "production_ready"
+      ],
+      "latest_release_tag": "flowise@3.0.13",
+      "latest_release_published_at": "2026-02-03T16:44:45Z"
     },
     {
       "full_name": "Mintplex-Labs/anything-llm",
       "name": "anything-llm",
       "html_url": "https://github.com/Mintplex-Labs/anything-llm",
       "description": "All-in-one desktop and Docker AI app with RAG, agents, and MCP compatibility.",
-      "stars": 55357,
-      "forks": 5984,
+      "stars": 55363,
+      "forks": 5985,
       "language": "JavaScript",
       "pushed_at": "2026-03-04T02:07:59Z",
-      "topics": ["ai-agents", "local-llm", "mcp", "rag", "self-hosted"],
-      "categories": ["chat_ui", "dashboard", "self_hosted"],
-      "signals": ["proven_dashboard_chat_ui", "multi_provider", "mcp", "production_ready"]
+      "topics": [
+        "ai-agents",
+        "custom-ai-agents",
+        "deepseek",
+        "kimi",
+        "llama3",
+        "llm",
+        "lmstudio",
+        "local-llm",
+        "localai",
+        "mcp",
+        "mcp-servers",
+        "moonshot",
+        "multimodal",
+        "no-code",
+        "ollama",
+        "qwen3",
+        "rag",
+        "vector-database",
+        "web-scraping"
+      ],
+      "categories": [
+        "chat_ui",
+        "dashboard",
+        "self_hosted"
+      ],
+      "signals": [
+        "proven_dashboard_chat_ui",
+        "multi_provider",
+        "mcp",
+        "production_ready"
+      ],
+      "latest_release_tag": "v1.11.1",
+      "latest_release_published_at": "2026-03-02T17:26:08Z"
     },
     {
       "full_name": "langflow-ai/langflow",
       "name": "langflow",
       "html_url": "https://github.com/langflow-ai/langflow",
       "description": "Visual builder and deploy platform for AI agents and workflows.",
-      "stars": 145238,
-      "forks": 8507,
+      "stars": 145241,
+      "forks": 8508,
       "language": "Python",
-      "pushed_at": "2026-03-04T05:06:46Z",
-      "topics": ["agents", "chatgpt", "multiagent", "react-flow"],
-      "categories": ["dashboard", "agent_builder", "workflow"],
-      "signals": ["proven_dashboard_chat_ui", "production_ready"]
+      "pushed_at": "2026-03-04T09:51:04Z",
+      "topics": [
+        "agents",
+        "chatgpt",
+        "generative-ai",
+        "large-language-models",
+        "multiagent",
+        "react-flow"
+      ],
+      "categories": [
+        "dashboard",
+        "agent_builder",
+        "workflow"
+      ],
+      "signals": [
+        "proven_dashboard_chat_ui",
+        "production_ready"
+      ],
+      "latest_release_tag": "1.7.3",
+      "latest_release_published_at": "2026-01-23T01:05:07Z"
     },
     {
       "full_name": "casibase/casibase",
@@ -103,48 +291,149 @@
       "forks": 525,
       "language": "Go",
       "pushed_at": "2026-02-20T11:42:56Z",
-      "topics": ["mcp", "agent", "chatbot", "claude", "gemini", "openai"],
-      "categories": ["dashboard", "admin_ui", "self_hosted"],
-      "signals": ["proven_dashboard_chat_ui", "multi_provider", "mcp"]
+      "topics": [
+        "a2a",
+        "agent",
+        "agi",
+        "casibase",
+        "chatbot",
+        "chatgpt",
+        "claude",
+        "gemini",
+        "gpt",
+        "huggingface",
+        "knowledge-base",
+        "langchain",
+        "llama",
+        "llm",
+        "manus",
+        "mcp",
+        "model-context-protocol",
+        "multi-agent",
+        "openai",
+        "rag"
+      ],
+      "categories": [
+        "dashboard",
+        "admin_ui",
+        "self_hosted"
+      ],
+      "signals": [
+        "proven_dashboard_chat_ui",
+        "multi_provider",
+        "mcp"
+      ],
+      "latest_release_tag": "v1.758.2",
+      "latest_release_published_at": "2026-02-19T15:25:16Z"
     },
     {
       "full_name": "langfuse/langfuse",
       "name": "langfuse",
       "html_url": "https://github.com/langfuse/langfuse",
       "description": "Open-source LLM engineering platform with observability, evals, and datasets.",
-      "stars": 22590,
-      "forks": 2259,
+      "stars": 22602,
+      "forks": 2261,
       "language": "TypeScript",
-      "pushed_at": "2026-03-03T23:06:46Z",
-      "topics": ["llm-observability", "metrics", "evaluation", "self-hosted"],
-      "categories": ["dashboard", "benchmarking", "observability"],
-      "signals": ["proven_dashboard_chat_ui", "production_ready"]
+      "pushed_at": "2026-03-04T09:45:47Z",
+      "topics": [
+        "analytics",
+        "autogen",
+        "evaluation",
+        "langchain",
+        "large-language-models",
+        "llama-index",
+        "llm",
+        "llm-evaluation",
+        "llm-observability",
+        "llmops",
+        "monitoring",
+        "observability",
+        "open-source",
+        "openai",
+        "playground",
+        "prompt-engineering",
+        "prompt-management",
+        "self-hosted",
+        "ycombinator"
+      ],
+      "categories": [
+        "dashboard",
+        "benchmarking",
+        "observability"
+      ],
+      "signals": [
+        "proven_dashboard_chat_ui",
+        "production_ready"
+      ],
+      "latest_release_tag": "v3.155.1",
+      "latest_release_published_at": "2026-02-23T17:10:05Z"
     },
     {
       "full_name": "BerriAI/litellm",
       "name": "litellm",
       "html_url": "https://github.com/BerriAI/litellm",
       "description": "AI gateway proxy for 100+ LLM providers with cost tracking and load balancing.",
-      "stars": 37672,
-      "forks": 6125,
+      "stars": 37690,
+      "forks": 6127,
       "language": "Python",
-      "pushed_at": "2026-03-04T07:37:35Z",
-      "topics": ["llm-gateway", "anthropic", "openai", "vertex-ai", "mcp-gateway"],
-      "categories": ["provider_routing", "benchmarking", "ops"],
-      "signals": ["multi_provider", "production_ready"]
+      "pushed_at": "2026-03-04T09:23:45Z",
+      "topics": [
+        "ai-gateway",
+        "anthropic",
+        "azure-openai",
+        "bedrock",
+        "gateway",
+        "langchain",
+        "litellm",
+        "llm",
+        "llm-gateway",
+        "llmops",
+        "mcp-gateway",
+        "openai",
+        "openai-proxy",
+        "vertex-ai"
+      ],
+      "categories": [
+        "provider_routing",
+        "benchmarking",
+        "ops"
+      ],
+      "signals": [
+        "multi_provider",
+        "production_ready"
+      ],
+      "latest_release_tag": "v1.82.0-nightly",
+      "latest_release_published_at": "2026-03-03T22:22:37Z"
     },
     {
       "full_name": "OpenHands/OpenHands",
       "name": "OpenHands",
       "html_url": "https://github.com/OpenHands/OpenHands",
       "description": "AI-driven software development agent platform.",
-      "stars": 68507,
+      "stars": 68516,
       "forks": 8547,
       "language": "Python",
-      "pushed_at": "2026-03-04T07:18:55Z",
-      "topics": ["agent", "developer-tools", "llm", "chatgpt", "claude-ai"],
-      "categories": ["agent_runtime", "developer_tools"],
-      "signals": ["production_ready"]
+      "pushed_at": "2026-03-04T08:18:15Z",
+      "topics": [
+        "agent",
+        "artificial-intelligence",
+        "chatgpt",
+        "claude-ai",
+        "cli",
+        "developer-tools",
+        "gpt",
+        "llm",
+        "openai"
+      ],
+      "categories": [
+        "agent_runtime",
+        "developer_tools"
+      ],
+      "signals": [
+        "production_ready"
+      ],
+      "latest_release_tag": "1.4.0",
+      "latest_release_published_at": "2026-02-18T15:42:57Z"
     },
     {
       "full_name": "huggingface/chat-ui",
@@ -155,9 +444,284 @@
       "forks": 1603,
       "language": "TypeScript",
       "pushed_at": "2026-03-03T21:31:32Z",
-      "topics": ["chatgpt", "llm", "svelte", "tailwindcss", "typescript"],
-      "categories": ["chat_ui", "self_hosted"],
-      "signals": ["proven_dashboard_chat_ui", "production_ready"]
+      "topics": [
+        "chatgpt",
+        "hacktoberfest",
+        "huggingface",
+        "llm",
+        "svelte",
+        "svelte-kit",
+        "sveltekit",
+        "tailwindcss",
+        "typescript"
+      ],
+      "categories": [
+        "chat_ui",
+        "self_hosted"
+      ],
+      "signals": [
+        "proven_dashboard_chat_ui",
+        "production_ready"
+      ],
+      "latest_release_tag": "v0.9.6",
+      "latest_release_published_at": "2026-01-21T11:15:17Z"
+    },
+    {
+      "full_name": "anthropics/claude-code",
+      "name": "claude-code",
+      "html_url": "https://github.com/anthropics/claude-code",
+      "description": "Agentic coding tool for the terminal: tasks, git, and natural language commands.",
+      "stars": 73474,
+      "forks": 5839,
+      "language": "Shell",
+      "pushed_at": "2026-03-04T02:23:31Z",
+      "topics": [],
+      "categories": [
+        "agent_runtime",
+        "developer_tools",
+        "viral_oss_benchmark"
+      ],
+      "signals": [
+        "viral_oss",
+        "claude_official",
+        "production_ready"
+      ],
+      "latest_release_tag": "v2.1.66",
+      "latest_release_published_at": "2026-03-04T01:19:19Z"
+    },
+    {
+      "full_name": "cline/cline",
+      "name": "cline",
+      "html_url": "https://github.com/cline/cline",
+      "description": "Autonomous coding agent for VS Code; MCP support, browser, file edits.",
+      "stars": 58615,
+      "forks": 5887,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T09:17:24Z",
+      "topics": [],
+      "categories": [
+        "agent_runtime",
+        "developer_tools",
+        "viral_oss_benchmark"
+      ],
+      "signals": [
+        "viral_oss",
+        "fastest_growing_2025",
+        "mcp",
+        "production_ready"
+      ],
+      "latest_release_tag": "v3.69.0",
+      "latest_release_published_at": "2026-03-03T00:25:12Z"
+    },
+    {
+      "full_name": "mcp/ChromeDevTools",
+      "name": "ChromeDevTools",
+      "html_url": "https://github.com/mcp/ChromeDevTools",
+      "description": "Chrome DevTools MCP: AI agents control and inspect live browsers.",
+      "stars": 27100,
+      "forks": 1200,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T00:00:00Z",
+      "topics": [
+        "mcp",
+        "chrome",
+        "puppeteer",
+        "automation",
+        "debugging"
+      ],
+      "categories": [
+        "mcp_tools",
+        "browser_automation",
+        "viral_oss_benchmark"
+      ],
+      "signals": [
+        "viral_oss",
+        "mcp",
+        "production_ready"
+      ]
+    },
+    {
+      "full_name": "nanobot-ai/nanobot",
+      "name": "nanobot",
+      "html_url": "https://github.com/nanobot-ai/nanobot",
+      "description": "Build MCP agents: framework with docs, examples, and UI packages.",
+      "stars": 1124,
+      "forks": 163,
+      "language": "Go",
+      "pushed_at": "2026-03-03T19:37:03Z",
+      "topics": [],
+      "categories": [
+        "mcp_tools",
+        "agent_builder",
+        "viral_oss_benchmark"
+      ],
+      "signals": [
+        "mcp",
+        "production_ready"
+      ],
+      "latest_release_tag": "v0.0.58",
+      "latest_release_published_at": "2026-03-03T19:37:03Z"
+    },
+    {
+      "full_name": "BeehiveInnovations/zen-mcp-server",
+      "name": "zen-mcp-server",
+      "html_url": "https://github.com/BeehiveInnovations/zen-mcp-server",
+      "description": "Claude Code + multi-model (Gemini, O3, OpenRouter, Ollama) as one system.",
+      "stars": 11182,
+      "forks": 954,
+      "language": "Python",
+      "pushed_at": "2025-12-15T17:07:31Z",
+      "topics": [],
+      "categories": [
+        "mcp_tools",
+        "provider_routing",
+        "viral_oss_benchmark"
+      ],
+      "signals": [
+        "multi_provider",
+        "mcp",
+        "production_ready"
+      ],
+      "latest_release_tag": "v9.8.2",
+      "latest_release_published_at": "2025-12-15T17:07:27Z"
+    },
+    {
+      "full_name": "punkpeye/awesome-mcp-servers",
+      "name": "awesome-mcp-servers",
+      "html_url": "https://github.com/punkpeye/awesome-mcp-servers",
+      "description": "Curated list of MCP servers and tools across dev, browser, data, and productivity workflows.",
+      "stars": 82121,
+      "forks": 7780,
+      "language": "Markdown",
+      "pushed_at": "2026-02-26T06:01:35Z",
+      "topics": [
+        "ai",
+        "mcp"
+      ],
+      "categories": [
+        "mcp_tools",
+        "ecosystem",
+        "viral_oss_benchmark"
+      ],
+      "signals": [
+        "viral_oss",
+        "mcp",
+        "production_ready"
+      ]
+    },
+    {
+      "full_name": "upstash/context7",
+      "name": "context7",
+      "html_url": "https://github.com/upstash/context7",
+      "description": "High-adoption MCP context server used for docs and retrieval workflows.",
+      "stars": 47622,
+      "forks": 2248,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T09:11:05Z",
+      "topics": [
+        "llm",
+        "mcp",
+        "mcp-server",
+        "vibe-coding"
+      ],
+      "categories": [
+        "mcp_tools",
+        "retrieval",
+        "viral_oss_benchmark"
+      ],
+      "signals": [
+        "viral_oss",
+        "mcp",
+        "production_ready"
+      ],
+      "latest_release_tag": "@upstash/context7-mcp@2.1.2",
+      "latest_release_published_at": "2026-02-23T10:06:57Z"
+    },
+    {
+      "full_name": "microsoft/playwright-mcp",
+      "name": "playwright-mcp",
+      "html_url": "https://github.com/microsoft/playwright-mcp",
+      "description": "Official Playwright MCP server for browser automation and UI validation.",
+      "stars": 28120,
+      "forks": 2273,
+      "language": "TypeScript",
+      "pushed_at": "2026-02-25T19:10:43Z",
+      "topics": [
+        "mcp",
+        "playwright"
+      ],
+      "categories": [
+        "mcp_tools",
+        "browser_automation",
+        "viral_oss_benchmark"
+      ],
+      "signals": [
+        "viral_oss",
+        "mcp",
+        "production_ready"
+      ],
+      "latest_release_tag": "v0.0.68",
+      "latest_release_published_at": "2026-02-14T23:17:47Z"
+    },
+    {
+      "full_name": "github/github-mcp-server",
+      "name": "github-mcp-server",
+      "html_url": "https://github.com/github/github-mcp-server",
+      "description": "Official GitHub MCP server for repository, issues, PR, and code context integration.",
+      "stars": 27460,
+      "forks": 3680,
+      "language": "Go",
+      "pushed_at": "2026-03-04T08:01:19Z",
+      "topics": [
+        "github",
+        "mcp",
+        "mcp-server"
+      ],
+      "categories": [
+        "mcp_tools",
+        "developer_tools",
+        "viral_oss_benchmark"
+      ],
+      "signals": [
+        "viral_oss",
+        "mcp",
+        "production_ready"
+      ],
+      "latest_release_tag": "v0.31.0",
+      "latest_release_published_at": "2026-02-19T17:03:35Z"
+    },
+    {
+      "full_name": "PrefectHQ/fastmcp",
+      "name": "fastmcp",
+      "html_url": "https://github.com/PrefectHQ/fastmcp",
+      "description": "Popular framework for quickly building MCP servers and tools.",
+      "stars": 23332,
+      "forks": 1791,
+      "language": "Python",
+      "pushed_at": "2026-03-04T02:51:24Z",
+      "topics": [
+        "agents",
+        "fastmcp",
+        "llms",
+        "mcp",
+        "mcp-clients",
+        "mcp-servers",
+        "mcp-tools",
+        "model-context-protocol",
+        "python"
+      ],
+      "categories": [
+        "mcp_tools",
+        "agent_builder",
+        "viral_oss_benchmark"
+      ],
+      "signals": [
+        "viral_oss",
+        "mcp",
+        "production_ready"
+      ],
+      "latest_release_tag": "v3.1.0",
+      "latest_release_published_at": "2026-03-03T02:42:42Z"
     }
   ]
 }

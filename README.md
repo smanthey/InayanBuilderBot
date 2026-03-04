@@ -29,6 +29,8 @@ This is a robust, working system, not a lite demo. It includes:
 - `POST /api/v1/indexing/sync`
 - `POST /api/v1/indexing/readiness`
 - `POST /api/v1/indexing/dashboard-scout`
+- `GET /api/v1/setup/status`
+- `POST /api/v1/setup/onboard`
 - `GET /api/v1/github/capabilities`
 - `POST /api/v1/github/research`
 - `GET /api/v1/reddit/capabilities`
@@ -68,6 +70,7 @@ git clone https://github.com/smanthey/InayanBuilderBot.git
 cd InayanBuilderBot
 npm install
 npm run setup:auto
+npm run setup:onboard
 ```
 
 No-terminal shortcut on macOS: double-click `launch.command`.
@@ -84,6 +87,7 @@ cd InayanBuilderBot
 npm ci
 npm run lint
 npm run security:check
+npm run mcp:health
 npm test
 npm run setup:auto
 npm run dev:auto
@@ -99,6 +103,19 @@ Set in `.env`:
 - `BUILDERBOT_API_KEY` (recommended for production)
 - `ALLOWED_ORIGIN`
 - `GITHUB_TOKEN` (recommended for GitHub API limit)
+- `GITHUB_PERSONAL_ACCESS_TOKEN` (optional alias for MCP GitHub server)
+- Postgres MCP (optional):
+  - `POSTGRES_HOST`
+  - `POSTGRES_PORT`
+  - `POSTGRES_USER`
+  - `POSTGRES_PASSWORD`
+  - `POSTGRES_DB`
+
+Guided setup options:
+
+- CLI onboarding wizard: `npm run setup:onboard`
+- Dashboard onboarding wizard: open `/` and use the **Onboarding Wizard** card
+- Full guide: [docs/ONBOARDING.md](/Users/tatsheen/claw-repos/InayanBuilderBot/docs/ONBOARDING.md)
 - `CLAW_ARCHITECT_ROOT` (optional, default `/Users/tatsheen/claw-architect`)
 - `EXTERNAL_INDEXING_MODE`:
   - `builtin` (default): use built-in curated repo index + advanced indexing
@@ -231,6 +248,13 @@ npm run dev:auto
 
 Open: `http://localhost:3000`
 
+## MCP Tooling
+
+This repo now includes MCP wrapper scripts and verification:
+
+- `npm run mcp:health` for health + syntax checks
+- Docs: [docs/MCP-SERVERS.md](/Users/tatsheen/claw-repos/InayanBuilderBot/docs/MCP-SERVERS.md)
+
 ## One-Click Deploy (Docker)
 
 ```bash
@@ -291,6 +315,7 @@ npm run test
 - [Installation](docs/INSTALLATION.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Gap Analysis](docs/GAP_ANALYSIS.md)
+- [Research and Benchmarks](docs/RESEARCH_AND_BENCHMARKS.md) — Reddit/GitHub research and viral OSS benchmarks for scout and pipeline
 - [Update Notes](docs/UPDATE_NOTES.md)
 - [Contributing](CONTRIBUTING.md)
 - [Code of Conduct](CODE_OF_CONDUCT.md)
