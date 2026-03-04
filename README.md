@@ -206,6 +206,24 @@ Research is native to the product:
 
 See: [`docs/RESEARCH_AND_BENCHMARKS.md`](./docs/RESEARCH_AND_BENCHMARKS.md)
 
+## Gap Intelligence Updates (OpenClaw Integration)
+
+InayanBuilderBot now pairs with the claw-architect completion loop for repo-level execution readiness:
+
+- confidence-scored section status (`complete`, `incomplete`, `partial`, `gap`)
+- evidence-backed findings (file + matched signal snippets)
+- prioritized `research_backlog` generation for remaining gaps
+- issue-level evidence bundles for faster autofix planning
+- optional link-suppressed mode for private/internal runs
+
+Example (from claw-architect):
+
+```bash
+npm run repo:completion:gap -- --repo veritap_2026 --no-research-links
+```
+
+Use this mode when you want clear completion status and exact missing sections without emitting GitHub/Reddit URLs in output artifacts.
+
 ## Environment Variables
 
 Core:

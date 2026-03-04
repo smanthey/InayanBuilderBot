@@ -1,5 +1,27 @@
 # Update Notes
 
+## 2026-03-04 (Gap intelligence + no-link completion mode)
+
+### Summary
+
+Improved coordination docs for builder-driven repo completion with stronger gap evidence and privacy-safe reporting mode.
+
+### Added to project docs
+
+- README now documents:
+  - confidence-scored gap status (`complete`, `incomplete`, `partial`, `gap`)
+  - evidence-backed section/issue findings
+  - prioritized `research_backlog`
+  - `--no-research-links` mode for private/internal output
+- documented command for repo completion run:
+  - `npm run repo:completion:gap -- --repo <repo> --no-research-links`
+
+### Why this matters
+
+- teams can still identify exact gaps and completion blockers
+- output remains actionable without publishing external research URLs
+- faster handoff from “analysis” to “fix list” for active repos
+
 ## 2026-03-04 (OpenClaw indexing + builder pulse + research + benchmark sync)
 
 ### Summary
