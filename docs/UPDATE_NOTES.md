@@ -2,6 +2,19 @@
 
 ## 2026-03-04
 
+### No-OpenClaw Default + Curated External Repo Index
+
+- `EXTERNAL_INDEXING_MODE` default is now `builtin`.
+- Added built-in curated repo index file: `data/builtin-repo-index.json`.
+- Scout/pipeline now use curated external repos first, then GitHub API fallback when needed.
+- Scout scoring now prioritizes proven dashboard/chat UI signals and excludes framework-only candidates more aggressively.
+- Added automation helpers:
+  - `scripts/bootstrap-local.mjs`
+  - `npm run setup:auto`
+  - `npm run start:auto`
+  - `npm run dev:auto`
+  - `launch.command` (macOS double-click startup)
+
 ### Chat Provider Compatibility Update
 
 `/api/v1/chat/reply` now supports natural provider aliases so agent prompts can use common names:

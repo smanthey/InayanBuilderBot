@@ -13,6 +13,7 @@ const rootDir = path.join(__dirname, "..");
 const publicDir = path.join(rootDir, "public");
 const dataDir = path.join(rootDir, ".data");
 const runsFile = path.join(dataDir, "runs.json");
+const builtinRepoIndexFile = path.join(rootDir, "data", "builtin-repo-index.json");
 
 const DEFAULT_PORT = Number(process.env.PORT || 3000);
 const CLAW_ARCHITECT_ROOT = process.env.CLAW_ARCHITECT_ROOT || "/Users/tatsheen/claw-architect";
@@ -304,12 +305,21 @@ async function githubSearch({ query, perPage, githubToken }) {
 }
 
 function computeUiEvidence(repo) {
-  const text = `${repo.name || ""} ${repo.description || ""} ${(repo.topics || []).join(" ")}`.toLowerCase();
+  const text = `${repo.name || ""} ${repo.description || ""} ${(repo.topics || []).join(" ")} ${(repo.signals || []).join(" ")} ${(repo.categories || []).join(" ")}`.toLowerCase();
   const checks = [
     ["dashboard", 3],
     ["chat", 3],
+    ["chat ui", 3],
+    ["webui", 3],
+    ["agent ui", 3],
     ["web ui", 2],
     ["admin", 2],
+    ["multi-provider", 2],
+    ["self-hosted", 2],
+    ["mcp", 2],
+    ["conversation", 1],
+    ["session", 1],
+    ["streaming", 1],
     ["nextjs", 1],
     ["react", 1],
     ["workflow", 1],
@@ -333,8 +343,10 @@ function scoreRepo(repo) {
   const recencyScore = Math.max(0, 25 - Math.min(25, recencyDays / 10));
   const ui = computeUiEvidence(repo);
 
-  const frameworkOnly = /(sdk|framework|runtime|toolkit|library|engine)/i.test(`${repo.name || ""} ${repo.description || ""}`)
-    && ui.evidence < 5;
+  const text = `${repo.name || ""} ${repo.description || ""} ${(repo.topics || []).join(" ")}`.toLowerCase();
+  const frameworkOnly = /(sdk|framework|runtime|toolkit|library|engine|starter|template)/i.test(text)
+    && ui.evidence < 6
+    && !/(dashboard|webui|chat ui|chatbot|admin ui|self-hosted)/i.test(text);
 
   const score =
     Math.log10(Math.max(1, stars)) * 42 +
@@ -410,6 +422,88 @@ function runBuiltinAdvancedIndexing({ repos, queries, minStars, topK }) {
       stars: r.stars || r.stargazers_count || 0,
     })),
   };
+}
+
+function normalizeRepoForScoring(repo) {
+  return {
+    full_name: repo.full_name,
+    name: repo.name || String(repo.full_name || "").split("/").pop() || "",
+    html_url: repo.html_url,
+    description: repo.description || "",
+    stargazers_count: Number(repo.stargazers_count || repo.stars || 0),
+    forks_count: Number(repo.forks_count || repo.forks || 0),
+    language: repo.language || null,
+    pushed_at: repo.pushed_at || null,
+    topics: Array.isArray(repo.topics) ? repo.topics : [],
+    signals: Array.isArray(repo.signals) ? repo.signals : [],
+    categories: Array.isArray(repo.categories) ? repo.categories : [],
+  };
+}
+
+function tokenizeQueries(queries = []) {
+  const stop = new Set(["and", "or", "the", "for", "with", "that", "from", "this", "have", "into", "your", "agent", "repo", "repos"]);
+  const tokens = [];
+  for (const q of Array.isArray(queries) ? queries : []) {
+    for (const t of String(q || "").toLowerCase().split(/[^a-z0-9+.-]+/g)) {
+      if (t.length < 3 || stop.has(t)) continue;
+      tokens.push(t);
+    }
+  }
+  return [...new Set(tokens)];
+}
+
+function loadBuiltinRepoIndex() {
+  const payload = readJsonSafe(builtinRepoIndexFile);
+  return Array.isArray(payload?.repos) ? payload.repos : [];
+}
+
+function queryBuiltinRepoIndex({ queries, minStars = 500, topK = 12 }) {
+  const repos = loadBuiltinRepoIndex();
+  if (!repos.length) return [];
+
+  const queryTokens = tokenizeQueries(queries);
+  const ranked = repos
+    .map((repo) => {
+      const normalized = normalizeRepoForScoring(repo);
+      const base = scoreRepo(normalized);
+      const haystack = `${normalized.full_name} ${normalized.description} ${normalized.topics.join(" ")} ${normalized.signals.join(" ")} ${normalized.categories.join(" ")}`.toLowerCase();
+      const queryMatches = queryTokens.filter((t) => haystack.includes(t)).length;
+      const provenUi = normalized.signals.includes("proven_dashboard_chat_ui") ? 5 : 0;
+      const mcpBonus = normalized.signals.includes("mcp") ? 2 : 0;
+      const score = Math.round((base.score + queryMatches * 3.5 + provenUi + mcpBonus) * 100) / 100;
+      return {
+        ...normalized,
+        stars: normalized.stargazers_count,
+        forks: normalized.forks_count,
+        score,
+        uiEvidence: base.uiEvidence,
+        uiHits: base.uiHits,
+        frameworkOnly: base.frameworkOnly,
+      };
+    })
+    .filter((repo) => repo.stargazers_count >= minStars)
+    .filter((repo) => !repo.frameworkOnly && repo.uiEvidence >= 5)
+    .sort((a, b) => b.score - a.score);
+
+  return ranked.slice(0, Math.max(topK * 3, 24));
+}
+
+async function discoverScoutRepos({ queries, perQuery, minStars, topK, seedRepos, githubToken }) {
+  if (Array.isArray(seedRepos) && seedRepos.length > 0) return seedRepos;
+
+  const discovered = queryBuiltinRepoIndex({ queries, minStars, topK });
+  const minNeeded = Math.max(topK, Math.min(30, perQuery * Math.max(1, queries.length)));
+  if (discovered.length >= minNeeded) return discovered;
+
+  for (const q of queries) {
+    try {
+      const items = await githubSearch({ query: q, perPage: perQuery, githubToken });
+      discovered.push(...items);
+    } catch {
+      // Keep pipeline resilient when GitHub API is unavailable/rate-limited.
+    }
+  }
+  return discovered;
 }
 
 function readJsonSafe(filePath) {
@@ -888,7 +982,7 @@ export function createApp() {
   const DEEPSEEK_CHAT_MODEL = (process.env.DEEPSEEK_CHAT_MODEL || "deepseek-chat").trim();
   const ANTHROPIC_CHAT_MODEL = (process.env.ANTHROPIC_CHAT_MODEL || process.env.CLAUDE_CHAT_MODEL || "claude-3-5-sonnet-latest").trim();
   const GEMINI_CHAT_MODEL = (process.env.GEMINI_CHAT_MODEL || process.env.GOOGLE_CHAT_MODEL || "gemini-1.5-pro").trim();
-  const EXTERNAL_INDEXING_MODE = (process.env.EXTERNAL_INDEXING_MODE || "auto").trim().toLowerCase();
+  const EXTERNAL_INDEXING_MODE = (process.env.EXTERNAL_INDEXING_MODE || "builtin").trim().toLowerCase();
   const providerStatus = buildProviderStatus({
     openaiApiKey: OPENAI_API_KEY,
     deepseekApiKey: DEEPSEEK_API_KEY,
@@ -1004,25 +1098,22 @@ export function createApp() {
       if (!parsed.success) return res.status(400).json({ ok: false, error: "invalid_request", details: parsed.error.flatten() });
 
       const p = parsed.data;
-      const discovered = [];
-      if (Array.isArray(p.seedRepos) && p.seedRepos.length > 0) {
-        discovered.push(...p.seedRepos);
-      } else {
-        for (const q of p.queries) {
-          const items = await githubSearch({ query: q, perPage: p.perQuery, githubToken: GITHUB_TOKEN });
-          for (const item of items) {
-            if (item.archived || item.disabled) continue;
-            if (Number(item.stargazers_count || 0) < p.minStars) continue;
-            discovered.push(item);
-          }
-        }
-      }
+      const discovered = await discoverScoutRepos({
+        queries: p.queries,
+        perQuery: p.perQuery,
+        minStars: p.minStars,
+        topK: p.topK,
+        seedRepos: p.seedRepos,
+        githubToken: GITHUB_TOKEN,
+      });
 
       const dedup = new Map();
       for (const repo of discovered) {
         const key = String(repo.full_name || "").toLowerCase();
         if (!key || dedup.has(key)) continue;
+        if (repo.archived || repo.disabled) continue;
         const scored = scoreRepo(repo);
+        if (Number(repo.stargazers_count || repo.stars || 0) < p.minStars) continue;
         if (scored.frameworkOnly) continue;
         if (scored.uiEvidence < 5) continue;
         dedup.set(key, {
@@ -1030,8 +1121,8 @@ export function createApp() {
           name: repo.name,
           html_url: repo.html_url,
           description: repo.description || "",
-          stars: Number(repo.stargazers_count || 0),
-          forks: Number(repo.forks_count || 0),
+          stars: Number(repo.stargazers_count || repo.stars || 0),
+          forks: Number(repo.forks_count || repo.forks || 0),
           language: repo.language || null,
           pushed_at: repo.pushed_at || null,
           topics: Array.isArray(repo.topics) ? repo.topics : [],
@@ -1139,30 +1230,30 @@ export function createApp() {
 
     let scoutRepos = [];
     try {
-      const discovered = [];
-      if (Array.isArray(p.seedRepos) && p.seedRepos.length > 0) {
-        discovered.push(...p.seedRepos);
-      } else {
-        for (const q of p.queries) {
-          const items = await githubSearch({ query: q, perPage: 15, githubToken: GITHUB_TOKEN });
-          discovered.push(...items);
-        }
-      }
+      const discovered = await discoverScoutRepos({
+        queries: p.queries,
+        perQuery: 15,
+        minStars: p.minStars,
+        topK: p.topK,
+        seedRepos: p.seedRepos,
+        githubToken: GITHUB_TOKEN,
+      });
 
       const dedup = new Map();
       for (const repo of discovered) {
         const key = String(repo.full_name || "").toLowerCase();
         if (!key || dedup.has(key)) continue;
+        if (repo.archived || repo.disabled) continue;
         const scored = scoreRepo(repo);
-        if (Number(repo.stargazers_count || 0) < p.minStars) continue;
+        if (Number(repo.stargazers_count || repo.stars || 0) < p.minStars) continue;
         if (scored.frameworkOnly || scored.uiEvidence < 5) continue;
         dedup.set(key, {
           full_name: repo.full_name,
           name: repo.name,
           html_url: repo.html_url,
           description: repo.description || "",
-          stars: Number(repo.stargazers_count || 0),
-          forks: Number(repo.forks_count || 0),
+          stars: Number(repo.stargazers_count || repo.stars || 0),
+          forks: Number(repo.forks_count || repo.forks || 0),
           language: repo.language || null,
           pushed_at: repo.pushed_at || null,
           topics: Array.isArray(repo.topics) ? repo.topics : [],

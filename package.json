@@ -8,8 +8,11 @@
     "node": ">=20.0.0"
   },
   "scripts": {
+    "setup:auto": "node scripts/bootstrap-local.mjs",
+    "start:auto": "npm run setup:auto && node src/index.js",
     "start": "node src/index.js",
     "dev": "NODE_ENV=development node --watch src/index.js",
+    "dev:auto": "npm run setup:auto && NODE_ENV=development node --watch src/index.js",
     "test": "node --test",
     "lint": "node --check src/index.js && node --check scripts/security-check.mjs",
     "security:check": "node scripts/security-check.mjs"

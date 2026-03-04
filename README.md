@@ -44,6 +44,7 @@ This is a robust, working system, not a lite demo. It includes:
 3. Benchmark and compare top candidates
 4. Advanced indexing integration (included by default):
    - Built-in indexing + benchmark refinement inside InayanBuilderBot (no extra MCP tooling required)
+   - Curated external repo index focused on proven dashboard/chat UI stacks
    - Optional OpenClaw external indexing/scout stack when available:
    - `index:sync:agent`
    - `repo:readiness:pulse`
@@ -57,8 +58,10 @@ This is a robust, working system, not a lite demo. It includes:
 git clone https://github.com/smanthey/InayanBuilderBot.git
 cd InayanBuilderBot
 npm install
-cp .env.example .env
+npm run setup:auto
 ```
+
+No-terminal shortcut on macOS: double-click `launch.command`.
 
 ## Configure
 
@@ -69,8 +72,8 @@ Set in `.env`:
 - `GITHUB_TOKEN` (recommended for GitHub API limit)
 - `CLAW_ARCHITECT_ROOT` (optional, default `/Users/tatsheen/claw-architect`)
 - `EXTERNAL_INDEXING_MODE`:
-  - `auto` (default): use OpenClaw if available, otherwise built-in advanced indexing
-  - `builtin`: always use built-in advanced indexing
+  - `builtin` (default): use built-in curated repo index + advanced indexing
+  - `auto`: use OpenClaw if available, otherwise built-in advanced indexing
   - `openclaw`: require OpenClaw external stack
 - one or more provider keys for live AI chat:
   - `OPENAI_API_KEY`
@@ -147,7 +150,7 @@ Auto-routing quality:
 ## Run
 
 ```bash
-npm run dev
+npm run dev:auto
 ```
 
 Open: `http://localhost:3000`

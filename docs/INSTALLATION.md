@@ -11,7 +11,7 @@
 git clone https://github.com/smanthey/InayanBuilderBot.git
 cd InayanBuilderBot
 npm install
-cp .env.example .env
+npm run setup:auto
 ```
 
 Set values in `.env`:
@@ -19,7 +19,7 @@ Set values in `.env`:
 - `PORT`
 - `BUILDERBOT_API_KEY`
 - `ALLOWED_ORIGIN`
-- `EXTERNAL_INDEXING_MODE` (`auto`, `builtin`, `openclaw`)
+- `EXTERNAL_INDEXING_MODE` (`builtin`, `auto`, `openclaw`)
 - at least one model provider key:
   - `OPENAI_API_KEY`
   - `DEEPSEEK_API_KEY`
@@ -31,7 +31,7 @@ Set values in `.env`:
 Development:
 
 ```bash
-npm run dev
+npm run dev:auto
 ```
 
 Production:

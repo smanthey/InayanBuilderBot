@@ -6,144 +6,523 @@
     <title>InayanBuilderBot Masterpiece + Chat</title>
     <style>
       :root {
-        --bg: #0d1117;
-        --panel: #161b22;
-        --line: #30363d;
-        --text: #e6edf3;
-        --muted: #9fb0c3;
-        --a: #58a6ff;
-        --b: #2ea043;
-        --c: #f2cc60;
+        --bg: #0b1020;
+        --bg-soft: #111b33;
+        --panel: #111827;
+        --panel-2: #101726;
+        --line: #24324d;
+        --text: #e8eefc;
+        --muted: #9eb0cf;
+        --blue: #70a7ff;
+        --green: #4fd38a;
+        --amber: #f7c65a;
+        --danger: #ff7a7a;
+        --shadow: 0 18px 50px rgba(5, 10, 30, 0.45);
       }
+
       * { box-sizing: border-box; }
+      html, body { height: 100%; }
       body {
         margin: 0;
-        font-family: ui-sans-serif, system-ui, Segoe UI, Roboto, Arial, sans-serif;
-        background: radial-gradient(circle at 20% 0%, #1f2937, #0d1117 50%);
         color: var(--text);
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        background:
+          radial-gradient(1200px 700px at 0% 0%, #1d2d52 0%, rgba(29, 45, 82, 0) 70%),
+          radial-gradient(1000px 640px at 100% 100%, #1e2741 0%, rgba(30, 39, 65, 0) 65%),
+          linear-gradient(160deg, #080d1a 0%, #0b1020 70%);
       }
-      .shell { max-width: 1260px; margin: 0 auto; padding: 18px; }
-      .hero h1 { margin: 0 0 8px; font-size: 30px; }
-      .hero p { margin: 0; color: var(--muted); }
-      .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 12px; margin-top: 14px; }
-      .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
-      .full { grid-column: span 12; }
-      .wide { grid-column: span 8; }
-      .small { grid-column: span 4; }
-      h2 { margin-top: 0; font-size: 18px; }
-      label { display: block; font-weight: 600; margin: 8px 0 5px; }
-      input, textarea {
-        width: 100%; padding: 10px; border: 1px solid var(--line);
-        border-radius: 10px; background: #0b1220; color: var(--text);
+
+      .app {
+        height: 100%;
+        display: grid;
+        grid-template-columns: 300px 1fr 410px;
       }
-      textarea { min-height: 92px; }
+
+      .panel {
+        border-right: 1px solid var(--line);
+        background: linear-gradient(180deg, rgba(17, 24, 39, 0.93), rgba(10, 16, 31, 0.95));
+        min-height: 0;
+      }
+
+      .panel.right {
+        border-right: 0;
+        border-left: 1px solid var(--line);
+        background: linear-gradient(180deg, rgba(12, 20, 36, 0.95), rgba(9, 14, 27, 0.95));
+      }
+
+      .left-wrap, .right-wrap, .center-wrap {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        height: 100%;
+      }
+
+      .section {
+        padding: 14px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .title {
+        margin: 0;
+        font-size: 15px;
+        letter-spacing: 0.2px;
+      }
+
+      .muted {
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.4;
+      }
+
+      .hero {
+        padding: 16px 16px 12px;
+      }
+
+      .hero h1 {
+        margin: 0;
+        font-size: 18px;
+        line-height: 1.3;
+      }
+
+      .hero p {
+        margin: 6px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .badges {
+        margin-top: 10px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .badge {
+        font-size: 11px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 3px 9px;
+        background: rgba(255, 255, 255, 0.02);
+      }
+
+      .stack {
+        display: grid;
+        gap: 8px;
+      }
+
+      button, input, textarea, select {
+        font: inherit;
+        color: inherit;
+      }
+
       button {
-        border: 0; border-radius: 10px; padding: 10px 14px; margin-right: 8px; margin-top: 8px;
-        font-weight: 700; cursor: pointer; background: var(--a); color: #08101c;
+        border: 1px solid transparent;
+        border-radius: 10px;
+        padding: 10px 12px;
+        background: #1e2f54;
+        color: #dbe8ff;
+        cursor: pointer;
+        font-weight: 600;
+        transition: 120ms ease;
       }
-      button.alt { background: var(--b); color: #07150d; }
-      button.warn { background: var(--c); color: #201700; }
-      .muted { color: var(--muted); font-size: 13px; }
-      pre {
-        margin: 0; border: 1px solid var(--line); border-radius: 10px; background: #0b1220;
-        color: #d7e7ff; min-height: 170px; max-height: 520px; overflow: auto; padding: 12px;
+
+      button:hover {
+        transform: translateY(-1px);
+        border-color: #4c72b8;
       }
-      .pill { display: inline-block; padding: 4px 8px; border: 1px solid var(--line); border-radius: 999px; font-size: 12px; margin-right: 6px; }
-      @media (max-width: 980px) { .full, .wide, .small { grid-column: span 12; } }
+
+      button.green { background: #1a3e33; border-color: #2b7d63; color: #cbf7e5; }
+      button.amber { background: #4b3b18; border-color: #9d7c2c; color: #ffe8b0; }
+      button.ghost { background: #121a2d; border-color: #2a3653; color: #c2d5ff; }
+
+      .left-actions {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+
+      .sessions {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+        padding: 8px;
+      }
+
+      .session-item {
+        padding: 10px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        margin-bottom: 8px;
+        background: rgba(255, 255, 255, 0.02);
+        cursor: pointer;
+      }
+
+      .session-item.active {
+        border-color: #5a87d9;
+        background: rgba(112, 167, 255, 0.14);
+      }
+
+      .session-item .id {
+        font-size: 11px;
+        color: #bdd0f4;
+      }
+
+      .session-item .desc {
+        margin-top: 4px;
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.35;
+      }
+
+      .center-wrap {
+        background: linear-gradient(180deg, rgba(12, 18, 33, 0.78), rgba(8, 13, 24, 0.9));
+      }
+
+      .chat-header {
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+      }
+
+      .chat-title {
+        font-size: 16px;
+        font-weight: 700;
+      }
+
+      .chat-sub {
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .chat-body {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+        padding: 16px;
+      }
+
+      .bubble {
+        max-width: min(920px, 92%);
+        margin-bottom: 12px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 10px 12px;
+        line-height: 1.45;
+        white-space: pre-wrap;
+        box-shadow: var(--shadow);
+      }
+
+      .bubble.user {
+        margin-left: auto;
+        background: linear-gradient(160deg, #19305a, #16284c);
+        border-color: #395991;
+      }
+
+      .bubble.agent {
+        margin-right: auto;
+        background: linear-gradient(160deg, #121a2c, #101a30);
+      }
+
+      .bubble-meta {
+        font-size: 11px;
+        color: #9bb1d8;
+        margin-bottom: 6px;
+      }
+
+      .composer {
+        border-top: 1px solid var(--line);
+        padding: 12px;
+        background: #0d1528;
+      }
+
+      .controls {
+        display: grid;
+        grid-template-columns: 1fr 130px 180px 120px;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+
+      input, textarea, select {
+        width: 100%;
+        background: #0b1222;
+        border: 1px solid #2a3957;
+        border-radius: 10px;
+        padding: 9px 10px;
+      }
+
+      textarea#chatMsg {
+        min-height: 90px;
+        resize: vertical;
+      }
+
+      .composer-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .right-wrap {
+        min-height: 0;
+      }
+
+      .right-scroll {
+        flex: 1;
+        overflow: auto;
+        padding: 12px;
+        display: grid;
+        gap: 10px;
+      }
+
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--panel-2);
+        padding: 12px;
+      }
+
+      .card h3 {
+        margin: 0 0 8px;
+        font-size: 13px;
+        letter-spacing: 0.2px;
+      }
+
+      .pair {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+
+      .mono {
+        white-space: pre-wrap;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 12px;
+        line-height: 1.35;
+      }
+
+      .log {
+        min-height: 140px;
+        max-height: 340px;
+        overflow: auto;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #0a1020;
+        padding: 9px;
+      }
+
+      .kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .kpi {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.02);
+        padding: 8px;
+      }
+
+      .kpi .k {
+        font-size: 11px;
+        color: var(--muted);
+      }
+
+      .kpi .v {
+        margin-top: 3px;
+        font-size: 16px;
+        font-weight: 700;
+      }
+
+      @media (max-width: 1300px) {
+        .app { grid-template-columns: 260px 1fr; }
+        .panel.right { display: none; }
+      }
+
+      @media (max-width: 920px) {
+        .app { grid-template-columns: 1fr; }
+        .panel.left { display: none; }
+        .controls { grid-template-columns: 1fr; }
+      }
     </style>
   </head>
   <body>
-    <div class="shell">
-      <section class="hero">
-        <h1>InayanBuilderBot: Masterpiece Agent + Chat Tool</h1>
-        <p>Dedicated to Suro Jason Inaya. Robust pipeline with indexing, git-repo scout, benchmark compare, and build blueprint.</p>
-      </section>
+    <div class="app">
+      <aside class="panel left">
+        <div class="left-wrap">
+          <div class="hero">
+            <h1>InayanBuilderBot</h1>
+            <p>Masterpiece Agent + OpenClaw/MCP-style indexing and chat orchestration.</p>
+            <div class="badges">
+              <span class="badge">Streaming</span>
+              <span class="badge">Sessions</span>
+              <span class="badge">Benchmark-First</span>
+            </div>
+          </div>
 
-      <div class="grid">
-        <section class="card wide">
-          <h2>Masterpiece Pipeline</h2>
-          <span class="pill">Indexing</span>
-          <span class="pill">Repo Scout</span>
-          <span class="pill">Benchmark</span>
-          <span class="pill">Blueprint</span>
+          <div class="section stack">
+            <div class="title">Quick Actions</div>
+            <div class="left-actions">
+              <button id="providerStatus" class="ghost">Load Provider Status</button>
+              <button id="refreshSessions" class="ghost">Refresh Sessions</button>
+              <button id="newSession" class="green">New Session</button>
+              <button id="refreshRuns" class="amber">Refresh Run History</button>
+            </div>
+          </div>
 
-          <label>Queries (one per line)</label>
-          <textarea id="queries">open source dashboard chatbot
+          <div class="section" style="padding-bottom: 6px;">
+            <div class="title">Chat Sessions</div>
+            <div class="muted">Select a thread to continue with memory.</div>
+          </div>
+
+          <div id="sessionList" class="sessions"></div>
+        </div>
+      </aside>
+
+      <main class="center-wrap">
+        <div class="chat-header">
+          <div>
+            <div class="chat-title">Agent Chat</div>
+            <div class="chat-sub">Video-style workflow: thread memory + stream-first replies + model controls.</div>
+          </div>
+          <div class="muted" id="chatState">Ready</div>
+        </div>
+
+        <div id="chatRows" class="chat-body"></div>
+
+        <div class="composer">
+          <div class="controls">
+            <input id="chatSessionId" placeholder="session id (auto if blank)" />
+            <select id="chatProvider">
+              <option value="auto">auto</option>
+              <option value="openai">openai</option>
+              <option value="deepseek">deepseek</option>
+              <option value="anthropic">anthropic</option>
+              <option value="claude">claude</option>
+              <option value="gemini">gemini</option>
+              <option value="google">google</option>
+            </select>
+            <input id="chatModel" placeholder="optional model override" />
+            <input id="chatTemperature" value="0.3" />
+          </div>
+          <textarea id="chatMsg">Give me architecture guidance for the masterpiece build.</textarea>
+          <div class="composer-actions">
+            <button id="sendChat" class="green">Send</button>
+            <button id="sendChatStream">Stream</button>
+            <button id="refreshChat" class="ghost">Load Chat History</button>
+          </div>
+        </div>
+      </main>
+
+      <aside class="panel right">
+        <div class="right-wrap">
+          <div class="section">
+            <div class="title">Masterpiece Pipeline</div>
+            <div class="muted">Research, index, benchmark, and build in one control pane.</div>
+          </div>
+
+          <div class="right-scroll">
+            <div class="card">
+              <h3>Pipeline Inputs</h3>
+              <label class="muted">Queries (one per line)</label>
+              <textarea id="queries">open source dashboard chatbot
 open source ai agent ui
 open source workflow automation dashboard</textarea>
+              <div class="pair" style="margin-top:8px;">
+                <input id="minStars" value="500" placeholder="min stars" />
+                <input id="topK" value="10" placeholder="top K" />
+              </div>
+              <label class="muted" style="margin-top:8px; display:block;">Product Name</label>
+              <input id="productName" value="Inaya Masterpiece Control Plane" />
+              <label class="muted" style="margin-top:8px; display:block;">Goal</label>
+              <textarea id="goal">Build a robust dashboard and chat product with benchmarked OSS module selection, production hardening, and complete release paperwork.</textarea>
+              <label class="muted" style="margin-top:8px; display:block;">Stack (comma-separated)</label>
+              <input id="stack" value="Node.js,Express,React,PostgreSQL" />
+            </div>
 
-          <div style="display:flex; gap:8px; max-width:360px; margin-top:8px;">
-            <input id="minStars" value="500" />
-            <input id="topK" value="10" />
+            <div class="card">
+              <h3>Pipeline Actions</h3>
+              <div class="stack">
+                <button id="runPipeline" class="amber">Run Full Pipeline (Robust)</button>
+                <button id="runScout">Scout Only</button>
+                <button id="runBenchmark" class="green">Benchmark Only</button>
+                <button id="runMasterpiece" class="ghost">Blueprint Only</button>
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Live KPIs</h3>
+              <div id="kpiGrid" class="kpi-grid">
+                <div class="kpi"><div class="k">Sessions</div><div class="v" id="kpiSessions">0</div></div>
+                <div class="kpi"><div class="k">Chats</div><div class="v" id="kpiChats">0</div></div>
+                <div class="kpi"><div class="k">Runs</div><div class="v" id="kpiRuns">0</div></div>
+                <div class="kpi"><div class="k">Last Provider</div><div class="v" id="kpiProvider">-</div></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Output</h3>
+              <div id="out" class="log mono">Ready.</div>
+            </div>
+
+            <div class="card">
+              <h3>Run History</h3>
+              <div id="runs" class="log mono">No runs yet.</div>
+            </div>
           </div>
-          <div class="muted">left=min stars, right=top K</div>
-
-          <label>Product Name</label>
-          <input id="productName" value="Inaya Masterpiece Control Plane" />
-
-          <label>Goal</label>
-          <textarea id="goal">Build a robust dashboard and chat product with benchmarked OSS module selection, production hardening, and complete release paperwork.</textarea>
-
-          <label>Stack (comma-separated)</label>
-          <input id="stack" value="Node.js,Express,React,PostgreSQL" />
-
-          <div class="row">
-            <button id="runPipeline" class="warn">Run Full Pipeline (Robust)</button>
-            <button id="runScout">Scout Only</button>
-            <button id="runBenchmark" class="alt">Benchmark Only</button>
-            <button id="runMasterpiece">Blueprint Only</button>
-          </div>
-        </section>
-
-        <section class="card small">
-          <h2>Chat Tool</h2>
-          <p class="muted">Context-aware replies using latest pipeline output.</p>
-          <label>Message</label>
-          <textarea id="chatMsg">Give me architecture guidance for the masterpiece build.</textarea>
-          <label>Provider</label>
-          <select id="chatProvider" style="width:100%; padding:10px; border: 1px solid var(--line); border-radius: 10px; background: #0b1220; color: var(--text);">
-            <option value="auto">auto</option>
-            <option value="openai">openai</option>
-            <option value="deepseek">deepseek</option>
-            <option value="anthropic">anthropic</option>
-            <option value="claude">claude</option>
-            <option value="gemini">gemini</option>
-            <option value="google">google</option>
-          </select>
-          <label>Model (optional)</label>
-          <input id="chatModel" placeholder="Leave blank for provider default" />
-          <label>Temperature</label>
-          <input id="chatTemperature" value="0.3" />
-          <label>Session ID (optional)</label>
-          <input id="chatSessionId" placeholder="auto-created if blank" />
-          <button id="sendChat">Send</button>
-          <button id="sendChatStream">Stream</button>
-          <button id="providerStatus" class="warn">Providers</button>
-          <button id="refreshSessions" class="warn">Sessions</button>
-          <button id="refreshChat" class="alt">History</button>
-          <pre id="chatOut">Chat ready.</pre>
-        </section>
-
-        <section class="card full">
-          <h2>Output</h2>
-          <pre id="out">Ready.</pre>
-        </section>
-
-        <section class="card full">
-          <h2>Run History</h2>
-          <button id="refreshRuns">Refresh</button>
-          <pre id="runs">No runs yet.</pre>
-        </section>
-      </div>
+        </div>
+      </aside>
     </div>
 
     <script>
       let scoutRepos = [];
       let benchmarkRepos = [];
+      let activeSessionId = "";
+      let localMessages = [];
 
       const out = document.getElementById("out");
       const runs = document.getElementById("runs");
-      const chatOut = document.getElementById("chatOut");
+      const sessionList = document.getElementById("sessionList");
+      const chatRows = document.getElementById("chatRows");
+      const chatState = document.getElementById("chatState");
+
+      function setState(text) {
+        chatState.textContent = text;
+      }
+
+      function formatTime(iso) {
+        if (!iso) return "";
+        const d = new Date(iso);
+        return d.toLocaleTimeString();
+      }
+
+      function renderMessages() {
+        chatRows.innerHTML = "";
+        if (!localMessages.length) {
+          chatRows.innerHTML = '<div class="muted">No messages yet. Send your first prompt.</div>';
+          return;
+        }
+        for (const m of localMessages) {
+          const wrap = document.createElement("div");
+          wrap.className = `bubble ${m.role === "user" ? "user" : "agent"}`;
+          const meta = document.createElement("div");
+          meta.className = "bubble-meta";
+          meta.textContent = `${m.role === "user" ? "You" : "Agent"} ${m.at ? `- ${formatTime(m.at)}` : ""}`;
+          const body = document.createElement("div");
+          body.textContent = m.content || "";
+          wrap.appendChild(meta);
+          wrap.appendChild(body);
+          chatRows.appendChild(wrap);
+        }
+        chatRows.scrollTop = chatRows.scrollHeight;
+      }
+
+      function setSession(id) {
+        activeSessionId = id || "";
+        document.getElementById("chatSessionId").value = activeSessionId;
+      }
 
       async function api(path, body) {
         const res = await fetch(path, {
@@ -158,14 +537,217 @@ open source workflow automation dashboard</textarea>
 
       function collectConfig() {
         return {
-          queries: document.getElementById("queries").value.split("\n").map(s => s.trim()).filter(Boolean),
+          queries: document.getElementById("queries").value.split("\n").map((s) => s.trim()).filter(Boolean),
           minStars: Number(document.getElementById("minStars").value || 500),
           topK: Number(document.getElementById("topK").value || 10),
           productName: document.getElementById("productName").value,
           userGoal: document.getElementById("goal").value,
-          stack: document.getElementById("stack").value.split(",").map(s => s.trim()).filter(Boolean),
+          stack: document.getElementById("stack").value.split(",").map((s) => s.trim()).filter(Boolean),
         };
       }
+
+      async function refreshKPIs() {
+        try {
+          const [sessionData, historyData, runsData] = await Promise.all([
+            api("/api/v1/chat/sessions"),
+            api("/api/v1/chat/history"),
+            api("/api/v1/runs"),
+          ]);
+          document.getElementById("kpiSessions").textContent = String(sessionData.count || 0);
+          document.getElementById("kpiChats").textContent = String(historyData.count || 0);
+          document.getElementById("kpiRuns").textContent = String(runsData.count || 0);
+          const latest = (historyData.history || [])[0];
+          document.getElementById("kpiProvider").textContent = latest?.provider || "-";
+        } catch {
+          // noop
+        }
+      }
+
+      async function refreshSessions() {
+        try {
+          const data = await api("/api/v1/chat/sessions");
+          sessionList.innerHTML = "";
+          const sessions = data.sessions || [];
+          if (!sessions.length) {
+            sessionList.innerHTML = '<div class="muted" style="padding:8px;">No sessions yet.</div>';
+          }
+          for (const s of sessions) {
+            const item = document.createElement("div");
+            item.className = `session-item ${activeSessionId === s.id ? "active" : ""}`;
+            item.innerHTML = `<div class="id">${s.id}</div><div class="desc">${(s.lastMessage || "No messages yet").slice(0, 120)}</div>`;
+            item.onclick = async () => {
+              setSession(s.id);
+              await loadSessionMessages(s.id);
+              await refreshSessions();
+            };
+            sessionList.appendChild(item);
+          }
+          await refreshKPIs();
+        } catch (e) {
+          sessionList.innerHTML = `<div class="muted" style="padding:8px;">${String(e)}</div>`;
+        }
+      }
+
+      async function loadSessionMessages(sessionId) {
+        if (!sessionId) return;
+        try {
+          const data = await api(`/api/v1/chat/sessions/${encodeURIComponent(sessionId)}`);
+          localMessages = (data.session?.messages || []).map((m) => ({
+            role: m.role,
+            content: m.content,
+            at: m.at,
+          }));
+          renderMessages();
+        } catch (e) {
+          out.textContent = String(e);
+        }
+      }
+
+      async function sendChat({ stream }) {
+        const message = document.getElementById("chatMsg").value.trim();
+        if (!message) return;
+        const model = document.getElementById("chatModel").value.trim();
+        const sessionInput = document.getElementById("chatSessionId").value.trim();
+        const provider = document.getElementById("chatProvider").value;
+        const tempRaw = Number(document.getElementById("chatTemperature").value || 0.3);
+        const temperature = Number.isFinite(tempRaw) ? tempRaw : 0.3;
+        const sessionId = sessionInput || activeSessionId || undefined;
+
+        localMessages.push({ role: "user", content: message, at: new Date().toISOString() });
+        renderMessages();
+
+        if (!stream) {
+          setState("Sending...");
+          try {
+            const data = await api("/api/v1/chat/reply", {
+              message,
+              provider,
+              model: model || undefined,
+              sessionId,
+              temperature,
+              context: { productName: document.getElementById("productName").value },
+            });
+            if (data.sessionId) setSession(data.sessionId);
+            localMessages.push({ role: "assistant", content: data.reply || "", at: new Date().toISOString() });
+            renderMessages();
+            setState(`Done via ${data.provider || "provider"}`);
+            await refreshSessions();
+          } catch (e) {
+            localMessages.push({ role: "assistant", content: String(e), at: new Date().toISOString() });
+            renderMessages();
+            setState("Error");
+          }
+          return;
+        }
+
+        setState("Streaming...");
+        const placeholder = { role: "assistant", content: "", at: new Date().toISOString() };
+        localMessages.push(placeholder);
+        renderMessages();
+
+        try {
+          const response = await fetch("/api/v1/chat/reply/stream", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              message,
+              provider,
+              model: model || undefined,
+              sessionId,
+              temperature,
+              context: { productName: document.getElementById("productName").value },
+            }),
+          });
+          if (!response.ok || !response.body) {
+            const text = await response.text();
+            throw new Error(text || `stream_failed:${response.status}`);
+          }
+
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const frames = buffer.split("\n\n");
+            buffer = frames.pop() || "";
+
+            for (const frame of frames) {
+              const eventLine = frame.split("\n").find((l) => l.startsWith("event:"));
+              const dataLine = frame.split("\n").find((l) => l.startsWith("data:"));
+              if (!eventLine || !dataLine) continue;
+              const event = eventLine.slice(6).trim();
+              const payload = JSON.parse(dataLine.slice(5).trim());
+
+              if (event === "start" && payload.sessionId) {
+                setSession(payload.sessionId);
+              }
+              if (event === "chunk") {
+                placeholder.content += String(payload.delta || "");
+                renderMessages();
+              }
+              if (event === "done") {
+                placeholder.content = payload.reply || placeholder.content;
+                renderMessages();
+                setState(`Done via ${payload.provider || "provider"}`);
+              }
+              if (event === "error") {
+                placeholder.content = `Error: ${payload.code} ${payload.detail || ""}`;
+                renderMessages();
+                setState("Error");
+              }
+            }
+          }
+          await refreshSessions();
+        } catch (e) {
+          placeholder.content = String(e);
+          renderMessages();
+          setState("Error");
+        }
+      }
+
+      document.getElementById("sendChat").onclick = () => sendChat({ stream: false });
+      document.getElementById("sendChatStream").onclick = () => sendChat({ stream: true });
+
+      document.getElementById("newSession").onclick = () => {
+        setSession("");
+        localMessages = [];
+        renderMessages();
+        setState("New session");
+      };
+
+      document.getElementById("providerStatus").onclick = async () => {
+        try {
+          const data = await api("/api/v1/chat/providers");
+          out.textContent = JSON.stringify(data, null, 2);
+        } catch (e) {
+          out.textContent = String(e);
+        }
+      };
+
+      document.getElementById("refreshChat").onclick = async () => {
+        try {
+          const data = await api("/api/v1/chat/history");
+          out.textContent = JSON.stringify(data, null, 2);
+          await refreshKPIs();
+        } catch (e) {
+          out.textContent = String(e);
+        }
+      };
+
+      document.getElementById("refreshRuns").onclick = async () => {
+        try {
+          const data = await api("/api/v1/runs");
+          runs.textContent = JSON.stringify(data, null, 2);
+          await refreshKPIs();
+        } catch (e) {
+          runs.textContent = String(e);
+        }
+      };
+
+      document.getElementById("refreshSessions").onclick = refreshSessions;
 
       document.getElementById("runPipeline").onclick = async () => {
         out.textContent = "Running full robust pipeline...";
@@ -178,6 +760,7 @@ open source workflow automation dashboard</textarea>
           scoutRepos = data.scout || [];
           benchmarkRepos = data.benchmark || [];
           out.textContent = JSON.stringify(data, null, 2);
+          await refreshKPIs();
         } catch (e) {
           out.textContent = String(e);
         }
@@ -215,7 +798,7 @@ open source workflow automation dashboard</textarea>
       document.getElementById("runMasterpiece").onclick = async () => {
         out.textContent = "Generating masterpiece blueprint...";
         const cfg = collectConfig();
-        const selected = (benchmarkRepos.length ? benchmarkRepos : scoutRepos).slice(0, 6).map(r => ({
+        const selected = (benchmarkRepos.length ? benchmarkRepos : scoutRepos).slice(0, 6).map((r) => ({
           full_name: r.full_name,
           benchmarkScore: r.benchmarkScore,
         }));
@@ -233,119 +816,11 @@ open source workflow automation dashboard</textarea>
         }
       };
 
-      document.getElementById("sendChat").onclick = async () => {
-        chatOut.textContent = "Sending...";
-        try {
-          const model = document.getElementById("chatModel").value.trim();
-          const sessionId = document.getElementById("chatSessionId").value.trim();
-          const tempRaw = Number(document.getElementById("chatTemperature").value || 0.3);
-          const temperature = Number.isFinite(tempRaw) ? tempRaw : 0.3;
-          const data = await api("/api/v1/chat/reply", {
-            message: document.getElementById("chatMsg").value,
-            provider: document.getElementById("chatProvider").value,
-            model: model || undefined,
-            sessionId: sessionId || undefined,
-            temperature,
-            context: { productName: document.getElementById("productName").value }
-          });
-          if (data.sessionId) document.getElementById("chatSessionId").value = data.sessionId;
-          chatOut.textContent = JSON.stringify(data, null, 2);
-        } catch (e) {
-          chatOut.textContent = String(e);
-        }
-      };
-
-      document.getElementById("sendChatStream").onclick = async () => {
-        chatOut.textContent = "";
-        try {
-          const model = document.getElementById("chatModel").value.trim();
-          const sessionId = document.getElementById("chatSessionId").value.trim();
-          const tempRaw = Number(document.getElementById("chatTemperature").value || 0.3);
-          const temperature = Number.isFinite(tempRaw) ? tempRaw : 0.3;
-          const response = await fetch("/api/v1/chat/reply/stream", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              message: document.getElementById("chatMsg").value,
-              provider: document.getElementById("chatProvider").value,
-              model: model || undefined,
-              sessionId: sessionId || undefined,
-              temperature,
-              context: { productName: document.getElementById("productName").value },
-            }),
-          });
-          if (!response.ok || !response.body) {
-            const text = await response.text();
-            throw new Error(text || `stream_failed:${response.status}`);
-          }
-
-          const reader = response.body.getReader();
-          const decoder = new TextDecoder();
-          let buffer = "";
-          let replyText = "";
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            const frames = buffer.split("\n\n");
-            buffer = frames.pop() || "";
-            for (const frame of frames) {
-              const eventLine = frame.split("\n").find((l) => l.startsWith("event:"));
-              const dataLine = frame.split("\n").find((l) => l.startsWith("data:"));
-              if (!eventLine || !dataLine) continue;
-              const event = eventLine.slice(6).trim();
-              const payload = JSON.parse(dataLine.slice(5).trim());
-              if (event === "start" && payload.sessionId) {
-                document.getElementById("chatSessionId").value = payload.sessionId;
-              }
-              if (event === "chunk") {
-                replyText += String(payload.delta || "");
-                chatOut.textContent = replyText;
-              }
-              if (event === "done") {
-                chatOut.textContent = `${replyText}\n\n${JSON.stringify(payload, null, 2)}`;
-              }
-              if (event === "error") {
-                chatOut.textContent = JSON.stringify(payload, null, 2);
-              }
-            }
-          }
-        } catch (e) {
-          chatOut.textContent = String(e);
-        }
-      };
-
-      document.getElementById("providerStatus").onclick = async () => {
-        try {
-          chatOut.textContent = JSON.stringify(await api("/api/v1/chat/providers"), null, 2);
-        } catch (e) {
-          chatOut.textContent = String(e);
-        }
-      };
-
-      document.getElementById("refreshChat").onclick = async () => {
-        try {
-          chatOut.textContent = JSON.stringify(await api("/api/v1/chat/history"), null, 2);
-        } catch (e) {
-          chatOut.textContent = String(e);
-        }
-      };
-
-      document.getElementById("refreshSessions").onclick = async () => {
-        try {
-          chatOut.textContent = JSON.stringify(await api("/api/v1/chat/sessions"), null, 2);
-        } catch (e) {
-          chatOut.textContent = String(e);
-        }
-      };
-
-      document.getElementById("refreshRuns").onclick = async () => {
-        try {
-          runs.textContent = JSON.stringify(await api("/api/v1/runs"), null, 2);
-        } catch (e) {
-          runs.textContent = String(e);
-        }
-      };
+      // Boot
+      renderMessages();
+      refreshSessions();
+      refreshKPIs();
+      document.getElementById("refreshRuns").click();
     </script>
   </body>
 </html>
