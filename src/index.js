@@ -439,6 +439,9 @@ function buildExecutableBlueprint({
     { path: "src/core/planning/execution-bridge.ts", purpose: "Convert plans into owner-ready tasks." },
     { path: "src/core/planning/project-memory.ts", purpose: "Persist decisions, rejected options, constraints." },
     { path: "src/ui/plan-editor.tsx", purpose: "Interactive constraint editing + plan diffs." },
+    { path: "tests/e2e/magic-run.spec.ts", purpose: "Playwright E2E coverage for deterministic magic run flow." },
+    { path: "tests/e2e/deploy-targets.spec.ts", purpose: "Playwright checks for Replit/Vercel deployment paths." },
+    { path: "playwright.config.ts", purpose: "Browser test configuration for CI and local smoke lanes." },
   ];
 
   const apiContracts = [
@@ -458,6 +461,8 @@ function buildExecutableBlueprint({
     "Quality gate: low-score plans fail and return actionable remediation.",
     "Execution bridge: generated tasks include owner, priority, acceptance criteria.",
     "Memory continuity: prior decisions are loaded into next recompile.",
+    "Playwright E2E: magic-run UI flow validates proof metrics and task export payloads.",
+    "Playwright E2E: deployment split checks enforce Replit/Vercel route expectations.",
   ];
 
   const rollout = [
@@ -547,6 +552,33 @@ function buildExecutionBridge(blueprint) {
       acceptance_criteria: [
         "Project memory API returns prior decisions and rejected options.",
         "Recompile endpoint consumes memory automatically.",
+      ],
+    },
+    {
+      priority: 5,
+      owner: "qa",
+      title: "Add Playwright E2E suite for magic-run + recompile",
+      estimateHours: 6,
+      dependencies: [
+        "Implement magic-run deterministic orchestrator",
+        "Add interactive plan editor with diff",
+      ],
+      acceptance_criteria: [
+        "tests/e2e/magic-run.spec.ts passes in CI and local run.",
+        "E2E asserts timeToFirstWowMs, planHash, and qualityScore are rendered.",
+      ],
+    },
+    {
+      priority: 5,
+      owner: "qa",
+      title: "Add deployment-target E2E coverage for Replit and Vercel flows",
+      estimateHours: 4,
+      dependencies: [
+        "Add Playwright E2E suite for magic-run + recompile",
+      ],
+      acceptance_criteria: [
+        "tests/e2e/deploy-targets.spec.ts validates Replit workflow command and Vercel API route contract.",
+        "Failure output includes actionable diff for target mismatch.",
       ],
     },
   ];
