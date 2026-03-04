@@ -640,11 +640,73 @@ function readJsonSafe(filePath) {
   }
 }
 
+function extractLatestRedditReport({ latestPipeline, latestRedditRun }) {
+  if (latestRedditRun?.output && Array.isArray(latestRedditRun.output.results)) return latestRedditRun.output;
+  if (latestPipeline?.output?.reddit && Array.isArray(latestPipeline.output.reddit.results)) return latestPipeline.output.reddit;
+  return null;
+}
+
+function roundNumber(value, decimals = 3) {
+  const n = Number(value || 0);
+  const p = Math.pow(10, decimals);
+  return Math.round(n * p) / p;
+}
+
+function buildWeightedRedditEvidence(redditReport, maxItems = 10) {
+  const results = Array.isArray(redditReport?.results) ? redditReport.results : [];
+  const sourceErrors = Array.isArray(redditReport?.summary?.source_errors) ? redditReport.summary.source_errors : [];
+  const sourceReliable = sourceErrors.length === 0;
+
+  const weighted = results
+    .map((r) => {
+      const rank = Math.max(0, Number(r.rank_score || 0));
+      const matchedTerms = Array.isArray(r.matched_terms) ? r.matched_terms : [];
+      const termCoverage = Math.min(0.35, matchedTerms.length * 0.06);
+      const sourceFactor = sourceReliable ? 1 : 0.82;
+      const baseWeight = Math.min(1.25, rank / 100) * sourceFactor + termCoverage;
+      const validated = Boolean(r.permalink || r.url)
+        && !Boolean(r.over_18)
+        && rank >= 28
+        && (sourceReliable || rank >= 48);
+      return {
+        title: clipText(r.title || "", 220),
+        subreddit: r.subreddit || null,
+        permalink: r.permalink || r.url || null,
+        rank_score: roundNumber(rank, 2),
+        matched_terms: matchedTerms.slice(0, 12),
+        relevance_weight: roundNumber(Math.max(0, Math.min(1.5, baseWeight)), 3),
+        validated,
+      };
+    })
+    .filter((r) => r.title && r.permalink)
+    .sort((a, b) => Number(b.relevance_weight || 0) - Number(a.relevance_weight || 0))
+    .slice(0, maxItems);
+
+  const validatedCount = weighted.filter((w) => w.validated).length;
+  const meanWeight = weighted.length
+    ? roundNumber(weighted.reduce((sum, w) => sum + Number(w.relevance_weight || 0), 0) / weighted.length, 3)
+    : 0;
+
+  return {
+    weighted,
+    summary: {
+      source_reliable: sourceReliable,
+      source_error_count: sourceErrors.length,
+      indexed_posts: Number(redditReport?.summary?.indexed_posts || 0),
+      weighted_count: weighted.length,
+      validated_count: validatedCount,
+      mean_relevance_weight: meanWeight,
+    },
+  };
+}
+
 function collectRepoIntelContext({ latestPipeline, allRuns, clawArchitectRoot }) {
   const latestScout = allRuns.find((r) => r.type === "scout");
   const latestBench = allRuns.find((r) => r.type === "benchmark");
   const latestReddit = allRuns.find((r) => r.type === "reddit_research");
   const latestGithubResearch = allRuns.find((r) => r.type === "github_research");
+  const latestRedditReport = extractLatestRedditReport({ latestPipeline, latestRedditRun: latestReddit });
+  const redditWeighted = buildWeightedRedditEvidence(latestRedditReport, 10);
 
   const pipelineRepos = Array.isArray(latestPipeline?.output?.blueprint?.selectedRepos)
     ? latestPipeline.output.blueprint.selectedRepos.map((r) => r.full_name).slice(0, 8)
@@ -684,14 +746,16 @@ function collectRepoIntelContext({ latestPipeline, allRuns, clawArchitectRoot })
     pipeline_top_repos: pipelineRepos,
     scout_top_repos: scoutRepos,
     benchmark_top_repos: benchRepos,
-    reddit_top_signals: Array.isArray(latestReddit?.output?.results)
-      ? latestReddit.output.results.slice(0, 8).map((r) => ({
+    reddit_top_signals: Array.isArray(latestRedditReport?.results)
+      ? latestRedditReport.results.slice(0, 8).map((r) => ({
         title: r.title,
         subreddit: r.subreddit,
         rank_score: r.rank_score,
         permalink: r.permalink || r.url,
       }))
       : [],
+    reddit_evidence_weighted: redditWeighted.weighted,
+    reddit_validation_summary: redditWeighted.summary,
     github_top_answers: Array.isArray(latestGithubResearch?.output?.answers)
       ? latestGithubResearch.output.answers.slice(0, 8).map((a) => ({
         title: a.title,
@@ -1249,6 +1313,8 @@ async function generateModelReply({
     "Dedication: built for Suro Jason Inaya.",
     "Be concise, technical, and execution-focused.",
     "Prioritize benchmark-first decisions, robust implementation plans, and security best practices.",
+    "When validated Reddit evidence exists with high relevance_weight, prioritize that evidence over generic assumptions.",
+    "Prefer recommendations that cite validated subreddit signals and linked posts when they directly support the build decision.",
     "Never invent secrets. Never return API keys.",
   ].join(" ");
 
@@ -1257,7 +1323,12 @@ async function generateModelReply({
     context: context || {},
     session_history: Array.isArray(sessionHistory) ? sessionHistory : [],
     repo_intel_context: intel,
+    reddit_prioritization_policy: {
+      prioritize_validated_reddit_when_weight_at_least: 0.55,
+      fallback_to_general_guidance_when_reddit_signal_weak: true,
+    },
     guidance_focus: [
+      "validated reddit evidence weighting",
       "indexing strategy",
       "repo benchmark compare",
       "masterpiece build sequencing",

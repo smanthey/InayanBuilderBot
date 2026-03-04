@@ -624,3 +624,119 @@ test("chat endpoint accepts claude/google provider aliases", async () => {
 
   server.close();
 });
+
+test("chat reply injects weighted validated reddit evidence into model context", async () => {
+  const originalFetch = global.fetch;
+  process.env.OPENAI_API_KEY = "test-openai-key";
+  process.env.OPENAI_CHAT_MODEL = "gpt-4o-mini";
+  delete process.env.DEEPSEEK_API_KEY;
+  delete process.env.ANTHROPIC_API_KEY;
+  delete process.env.CLAUDE_API_KEY;
+  delete process.env.GEMINI_API_KEY;
+  delete process.env.GOOGLE_API_KEY;
+  delete process.env.GOOGLE_GENAI_API_KEY;
+
+  let capturedOpenAiBody = null;
+  global.fetch = async (url, options = {}) => {
+    const target = String(url || "");
+    if (target.includes("reddit.com/r/AI_Agents/search.json")) {
+      return new Response(
+        JSON.stringify({
+          data: {
+            children: [
+              {
+                data: {
+                  id: "rctx1",
+                  title: "Validated dashboard chat ui benchmark strategy",
+                  subreddit: "AI_Agents",
+                  permalink: "/r/AI_Agents/comments/rctx1/validated_dashboard_chat_ui_benchmark_strategy/",
+                  score: 160,
+                  num_comments: 41,
+                  upvote_ratio: 0.95,
+                  selftext: "includes benchmark and workflow details",
+                  created_utc: Math.floor(Date.now() / 1000) - 3600,
+                },
+              },
+            ],
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (target.includes("api.openai.com/v1/chat/completions")) {
+      capturedOpenAiBody = JSON.parse(String(options.body || "{}"));
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: "reddit-weighted-reply" } }],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    return originalFetch(url, options);
+  };
+
+  const app = createApp();
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once("listening", resolve));
+
+  try {
+    const address = server.address();
+    const port = typeof address === "object" && address ? address.port : 0;
+
+    const pipelineResponse = await originalFetch(`http://127.0.0.1:${port}/api/v1/masterpiece/pipeline/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        productName: "Inaya Reddit Weighting",
+        userGoal: "Build robust dashboard chat tooling with benchmark evidence and community validation.",
+        stack: ["Node.js", "Express", "React"],
+        queries: ["dashboard chat ui"],
+        minStars: 500,
+        topK: 5,
+        runExternal: false,
+        runGithubResearch: false,
+        runRedditResearch: true,
+        reddit: { query: "dashboard chat ui benchmark workflow", subreddits: ["AI_Agents"], maxResults: 10 },
+        seedRepos: [
+          {
+            full_name: "acme/agent-dashboard-chat",
+            name: "agent-dashboard-chat",
+            description: "dashboard chat app",
+            stargazers_count: 3400,
+            forks_count: 300,
+            topics: ["dashboard", "chat", "react"],
+            pushed_at: new Date().toISOString(),
+          },
+        ],
+      }),
+    });
+    const pipelineBody = await pipelineResponse.json();
+    assert.equal(pipelineResponse.status, 200);
+    assert.equal(Boolean(pipelineBody?.reddit?.results?.length), true);
+
+    const chatResponse = await originalFetch(`http://127.0.0.1:${port}/api/v1/chat/reply`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: "How should we prioritize build choices?",
+        provider: "openai",
+        temperature: 0.2,
+      }),
+    });
+    const chatBody = await chatResponse.json();
+    assert.equal(chatResponse.status, 200);
+    assert.equal(chatBody.ok, true);
+    assert.equal(chatBody.reply, "reddit-weighted-reply");
+    assert.equal(Boolean(capturedOpenAiBody), true);
+
+    const userMessage = Array.isArray(capturedOpenAiBody?.messages)
+      ? capturedOpenAiBody.messages.find((m) => m.role === "user")?.content || ""
+      : "";
+    assert.equal(userMessage.includes("\"reddit_evidence_weighted\""), true);
+    assert.equal(userMessage.includes("\"reddit_validation_summary\""), true);
+    assert.equal(userMessage.includes("\"reddit_prioritization_policy\""), true);
+  } finally {
+    global.fetch = originalFetch;
+    server.close();
+  }
+});
