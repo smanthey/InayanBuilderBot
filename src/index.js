@@ -2551,6 +2551,7 @@ export function createApp() {
 
   const app = express();
   const NODE_ENV = process.env.NODE_ENV || "development";
+  const E2E_MOCK_MODE = String(process.env.INAYAN_E2E_MOCK_MODE || "0").trim() === "1";
   const SQLITE_INDEX_ENABLED = String(process.env.SQLITE_INDEX_ENABLED || "1").trim() !== "0";
   const SQLITE_INDEX_DB_PATH = String(process.env.INAYAN_DB_PATH || path.join(dataDir, "inayan-index.db")).trim();
   const API_KEY = (process.env.BUILDERBOT_API_KEY || "").trim();
@@ -2637,7 +2638,10 @@ export function createApp() {
   };
 
   app.disable("x-powered-by");
-  app.use(helmet());
+  app.use(helmet({
+    // The dashboard ships an inline script block; keep CSP disabled until nonce-based script loading is added.
+    contentSecurityPolicy: false,
+  }));
   app.use(express.json({ limit: "1mb" }));
   app.use(rateLimit({ windowMs: RATE_LIMIT_WINDOW_MS, max: RATE_LIMIT_MAX, standardHeaders: true, legacyHeaders: false }));
   app.use((req, res, next) => {
@@ -2663,6 +2667,93 @@ export function createApp() {
     return next();
   };
   const openClawCaps = detectOpenClawCapabilities(CLAW_ARCHITECT_ROOT);
+  const buildMockGithubReport = ({ query, maxResults = 40 }) => {
+    const capped = Math.max(2, Math.min(8, Number(maxResults || 8)));
+    const repoResults = Array.from({ length: capped }).map((_, i) => ({
+      full_name: `mockorg/manychat-flow-${i + 1}`,
+      html_url: `https://github.com/mockorg/manychat-flow-${i + 1}`,
+      description: `Mock evidence for ${query}`,
+      stars: 2200 - i * 120,
+      forks: 220 - i * 10,
+      language: "TypeScript",
+      topics: ["chatbot", "automation", "dashboard", "workflows"],
+      uiEvidence: 10 - i,
+      breakPatternEvidence: 6 - Math.floor(i / 2),
+      breakPatternHits: ["webhook_signature_verify", "queue_retry"],
+      score: 90 - i * 3,
+    }));
+    const answerRows = Array.from({ length: Math.min(4, capped) }).map((_, i) => ({
+      title: `Mock issue guidance ${i + 1}: ${query}`.slice(0, 220),
+      html_url: `https://github.com/mockorg/manychat-flow-${i + 1}/issues/${100 + i}`,
+      repository_url: `https://api.github.com/repos/mockorg/manychat-flow-${i + 1}`,
+      comments: 12 - i,
+      updated_at: new Date(Date.now() - i * 86400000).toISOString(),
+      rank_score: 88 - i * 4,
+      matched_terms: tokenizeSearchText(query).slice(0, 6),
+      code_snippets: ["router.post('/webhooks/instagram', verifySignature, handler);"],
+    }));
+    return {
+      summary: {
+        generated_at: new Date().toISOString(),
+        query,
+        repo_hits: repoResults.length,
+        answer_hits: answerRows.length,
+        top_terms: tokenizeSearchText(query).slice(0, 10),
+        source_errors: [],
+        mode: "mock",
+      },
+      repos: repoResults,
+      answers: answerRows,
+      repo_results: repoResults,
+      answer_results: answerRows,
+    };
+  };
+
+  const buildMockRedditReport = ({ query, subreddits = [] }) => {
+    const subs = Array.isArray(subreddits) && subreddits.length ? subreddits : ["marketing", "socialmedia"];
+    const results = subs.slice(0, 4).map((subreddit, i) => ({
+      id: `mock_${subreddit}_${i + 1}`,
+      title: `Mock ${subreddit} signal for ${query}`.slice(0, 220),
+      subreddit,
+      permalink: `https://www.reddit.com/r/${subreddit}/comments/mock${i + 1}/`,
+      url: `https://www.reddit.com/r/${subreddit}/comments/mock${i + 1}/`,
+      score: 180 - i * 20,
+      num_comments: 30 - i * 3,
+      upvote_ratio: 0.93,
+      created_utc: Math.floor(Date.now() / 1000) - i * 7200,
+      rank_score: 140 - i * 10,
+      relevance_weight: 0.84 - i * 0.08,
+      source: "mock_reddit",
+      matched_terms: tokenizeSearchText(query).slice(0, 8),
+    }));
+    return {
+      summary: {
+        generated_at: new Date().toISOString(),
+        query,
+        subreddits: subs,
+        limit_per_subreddit: 12,
+        time_window: "week",
+        indexed_posts: results.length,
+        source_errors: [],
+        top_terms: tokenizeSearchText(query).slice(0, 10),
+        source_health: subs.map((s) => ({ subreddit: s, source: "mock_reddit", ok: true })),
+        auth_profiles: [{ id: "mock_profile", hasAccessToken: false }],
+        mode: "mock",
+      },
+      results,
+      posts: results,
+    };
+  };
+
+  const doGithubResearch = async (input) => {
+    if (E2E_MOCK_MODE) return buildMockGithubReport(input || {});
+    return await runGithubResearch(input);
+  };
+
+  const doRedditResearch = async (input) => {
+    if (E2E_MOCK_MODE) return buildMockRedditReport(input || {});
+    return await runRedditResearch(input);
+  };
   if (indexStore?.enabled) {
     try {
       indexStore.refreshRepos({ repos: loadBuiltinRepoIndex(), source: "builtin" });
@@ -2945,7 +3036,7 @@ export function createApp() {
 
     try {
       const p = parsed.data;
-      const report = await runGithubResearch({
+      const report = await doGithubResearch({
         query: p.query,
         perPage: p.perPage,
         maxResults: p.maxResults,
@@ -3011,7 +3102,7 @@ export function createApp() {
       const subreddits = Array.isArray(p.subreddits) && p.subreddits.length
         ? p.subreddits
         : REDDIT_DEFAULT_SUBREDDITS;
-      const report = await runRedditResearch({
+      const report = await doRedditResearch({
         query: p.query,
         subreddits,
         limitPerSubreddit: p.limitPerSubreddit,
@@ -3391,7 +3482,7 @@ export function createApp() {
         let cached = true;
         if (!githubReport) {
           cached = false;
-          githubReport = await runGithubResearch({
+          githubReport = await doGithubResearch({
             query: githubQuery,
             perPage: Number(p?.github?.perPage || 20),
             maxResults: Number(p?.github?.maxResults || 40),
@@ -3423,7 +3514,7 @@ export function createApp() {
             userGoal: p.userGoal,
             queries: [String(p.queries?.[0] || p.productName || "ai builder")],
           }, 120);
-          githubReport = await runGithubResearch({
+          githubReport = await doGithubResearch({
             query: fallbackQuery,
             perPage: 12,
             maxResults: 24,
@@ -3496,7 +3587,7 @@ export function createApp() {
         let cached = true;
         if (!redditReport) {
           cached = false;
-          redditReport = await runRedditResearch({
+          redditReport = await doRedditResearch({
             query: redditQuery,
             subreddits: redditSubreddits,
             limitPerSubreddit: Number(p?.reddit?.limitPerSubreddit || 25),
@@ -3728,7 +3819,7 @@ export function createApp() {
       queries,
     };
     try {
-      githubReport = await runGithubResearch({
+      githubReport = await doGithubResearch({
         query: buildScopedGithubQuery(magicInput, 220),
         perPage: 20,
         maxResults: timeoutTierConfig.maxResults,
@@ -3738,7 +3829,7 @@ export function createApp() {
       githubReport = null;
     }
     try {
-      redditReport = await runRedditResearch({
+      redditReport = await doRedditResearch({
         query: buildScopedGithubQuery({
           ...magicInput,
           queries: [...queries, "builder", "workflow"],
@@ -4060,7 +4151,7 @@ export function createApp() {
     .replace(/sk-[A-Za-z0-9._-]+/g, "[REDACTED_KEY]");
 
   const executeChatReply = async ({ message, context, provider, model, temperature, sessionId }) => {
-    if (!OPENAI_API_KEY && !DEEPSEEK_API_KEY && !ANTHROPIC_API_KEY && !GEMINI_API_KEY) {
+    if (!E2E_MOCK_MODE && !OPENAI_API_KEY && !DEEPSEEK_API_KEY && !ANTHROPIC_API_KEY && !GEMINI_API_KEY) {
       const err = new Error("chat_model_not_configured");
       err.status = 503;
       throw err;
@@ -4068,27 +4159,37 @@ export function createApp() {
     const latestPipeline = appState.runs.find((r) => r.type === "pipeline");
     const session = ensureChatSession(sessionId);
     appendSessionMessage(session, "user", message);
-    const modelResult = await generateModelReply({
-      message,
-      context,
-      latestPipeline,
-      allRuns: appState.runs,
-      clawArchitectRoot: CLAW_ARCHITECT_ROOT,
-      providerPreference: provider,
-      modelOverride: model,
-      temperature,
-      openaiApiKey: OPENAI_API_KEY,
-      deepseekApiKey: DEEPSEEK_API_KEY,
-      anthropicApiKey: ANTHROPIC_API_KEY,
-      geminiApiKey: GEMINI_API_KEY,
-      openaiModel: OPENAI_CHAT_MODEL,
-      deepseekModel: DEEPSEEK_CHAT_MODEL,
-      anthropicModel: ANTHROPIC_CHAT_MODEL,
-      geminiModel: GEMINI_CHAT_MODEL,
-      providerMetrics: appState.providerMetrics,
-      providerStatus,
-      sessionHistory: getSessionHistory(session, 8),
-    });
+    const modelResult = E2E_MOCK_MODE
+      ? {
+        reply: `Mock assistant reply for: ${String(message || "").slice(0, 140)}`,
+        provider: "mock",
+        model: "mock-e2e-v1",
+        latencyMs: 8,
+        estimatedCostUsd: 0,
+        inputTokens: estimateTokenCount(message),
+        outputTokens: 22,
+      }
+      : await generateModelReply({
+        message,
+        context,
+        latestPipeline,
+        allRuns: appState.runs,
+        clawArchitectRoot: CLAW_ARCHITECT_ROOT,
+        providerPreference: provider,
+        modelOverride: model,
+        temperature,
+        openaiApiKey: OPENAI_API_KEY,
+        deepseekApiKey: DEEPSEEK_API_KEY,
+        anthropicApiKey: ANTHROPIC_API_KEY,
+        geminiApiKey: GEMINI_API_KEY,
+        openaiModel: OPENAI_CHAT_MODEL,
+        deepseekModel: DEEPSEEK_CHAT_MODEL,
+        anthropicModel: ANTHROPIC_CHAT_MODEL,
+        geminiModel: GEMINI_CHAT_MODEL,
+        providerMetrics: appState.providerMetrics,
+        providerStatus,
+        sessionHistory: getSessionHistory(session, 8),
+      });
     appendSessionMessage(session, "assistant", modelResult.reply, {
       provider: modelResult.provider,
       model: modelResult.model,
