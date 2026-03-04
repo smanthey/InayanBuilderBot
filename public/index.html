@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>InayanBuilderBot Masterpiece + Chat</title>
+    <style>
+      :root { --bg:#0d1117; --panel:#161b22; --line:#30363d; --text:#e6edf3; --muted:#9fb0c3; --a:#58a6ff; --b:#2ea043; }
+      *{box-sizing:border-box} body{margin:0;font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Arial,sans-serif;background:radial-gradient(circle at 20% 0%,#1f2937,#0d1117 50%);color:var(--text)}
+      .shell{max-width:1220px;margin:0 auto;padding:20px}.hero h1{margin:0 0 8px;font-size:30px}.hero p{margin:0;color:var(--muted)}
+      .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:12px}.card{grid-column:span 6;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
+      .full{grid-column:span 12}.small{grid-column:span 4}.wide{grid-column:span 8}
+      h2{margin-top:0;font-size:18px} label{display:block;font-weight:600;margin:8px 0 5px}
+      input,textarea{width:100%;padding:10px;border-radius:10px;border:1px solid var(--line);background:#0b1220;color:var(--text)} textarea{min-height:90px}
+      button{border:0;border-radius:10px;padding:10px 14px;font-weight:700;background:var(--a);color:#08101c;cursor:pointer;margin-right:8px;margin-top:8px}
+      button.alt{background:var(--b);color:#07150d} .muted{color:var(--muted);font-size:13px}
+      pre{margin:0;border:1px solid var(--line);border-radius:10px;padding:12px;background:#0b1220;color:#d7e7ff;min-height:170px;max-height:500px;overflow:auto}
+      @media (max-width:980px){.card,.small,.wide,.full{grid-column:span 12}}
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <div class="hero">
+        <h1>InayanBuilderBot: Masterpiece Agent + Chat Tool</h1>
+        <p>Dedicated to Suro Jason Inaya. Full benchmark-first build workflow.</p>
+      </div>
+
+      <div class="grid">
+        <section class="card wide">
+          <h2>Masterpiece Agent Flow</h2>
+          <label>Scout Queries (one per line)</label>
+          <textarea id="queries">open source dashboard chatbot
+open source ai agent ui
+open source workflow automation dashboard</textarea>
+          <div class="muted">Min stars + Top K</div>
+          <div style="display:flex;gap:8px;max-width:320px">
+            <input id="minStars" value="500" />
+            <input id="topK" value="10" />
+          </div>
+
+          <label>Product Name</label>
+          <input id="productName" value="Inaya Masterpiece Control Plane" />
+          <label>Goal</label>
+          <textarea id="goal">Build a full dashboard and chat product with benchmarked OSS module selection, strict security defaults, and production-ready release docs.</textarea>
+          <label>Stack</label>
+          <input id="stack" value="Node.js,Express,React,PostgreSQL" />
+
+          <button id="runScout">1. Run Scout</button>
+          <button id="runBenchmark" class="alt">2. Benchmark</button>
+          <button id="runMasterpiece">3. Build Masterpiece</button>
+        </section>
+
+        <section class="card small">
+          <h2>Chat Tool</h2>
+          <p class="muted">Ask architecture, benchmark, and security questions.</p>
+          <label>Message</label>
+          <textarea id="chatMsg">What architecture should we lock first for dashboard and chat?</textarea>
+          <button id="sendChat">Send Chat</button>
+          <button id="refreshChat" class="alt">Refresh Chat History</button>
+          <pre id="chatOut">Chat ready.</pre>
+        </section>
+
+        <section class="card full">
+          <h2>Agent Output</h2>
+          <pre id="out">Ready.</pre>
+        </section>
+
+        <section class="card full">
+          <h2>Run History</h2>
+          <button id="refreshRuns">Refresh Runs</button>
+          <pre id="runs">No runs yet.</pre>
+        </section>
+      </div>
+    </div>
+
+    <script>
+      let scoutRepos = [];
+      let benchmarkRepos = [];
+      const out = document.getElementById("out");
+      const runs = document.getElementById("runs");
+      const chatOut = document.getElementById("chatOut");
+
+      async function api(path, body) {
+        const res = await fetch(path, {
+          method: body ? "POST" : "GET",
+          headers: { "Content-Type": "application/json" },
+          body: body ? JSON.stringify(body) : undefined,
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(JSON.stringify(data));
+        return data;
+      }
+
+      document.getElementById("runScout").onclick = async () => {
+        out.textContent = "Running scout...";
+        try {
+          const queries = document.getElementById("queries").value.split("\n").map(s => s.trim()).filter(Boolean);
+          const minStars = Number(document.getElementById("minStars").value || 500);
+          const topK = Number(document.getElementById("topK").value || 10);
+          const data = await api("/api/v1/scout/run", { queries, minStars, topK, perQuery: 15 });
+          scoutRepos = data.repos || [];
+          out.textContent = JSON.stringify(data, null, 2);
+        } catch (e) { out.textContent = String(e); }
+      };
+
+      document.getElementById("runBenchmark").onclick = async () => {
+        out.textContent = "Running benchmark...";
+        if (!scoutRepos.length) return (out.textContent = "Run scout first.");
+        try {
+          const data = await api("/api/v1/benchmark/run", { repos: scoutRepos });
+          benchmarkRepos = data.ranked || [];
+          out.textContent = JSON.stringify(data, null, 2);
+        } catch (e) { out.textContent = String(e); }
+      };
+
+      document.getElementById("runMasterpiece").onclick = async () => {
+        out.textContent = "Generating masterpiece blueprint...";
+        const selected = (benchmarkRepos.length ? benchmarkRepos : scoutRepos).slice(0, 5).map(r => ({ full_name: r.full_name, benchmarkScore: r.benchmarkScore }));
+        if (!selected.length) return (out.textContent = "Run scout and benchmark first.");
+        try {
+          const data = await api("/api/v1/masterpiece/build", {
+            productName: document.getElementById("productName").value,
+            userGoal: document.getElementById("goal").value,
+            selectedRepos: selected,
+            stack: document.getElementById("stack").value.split(",").map(s => s.trim()).filter(Boolean),
+          });
+          out.textContent = JSON.stringify(data, null, 2);
+        } catch (e) { out.textContent = String(e); }
+      };
+
+      document.getElementById("sendChat").onclick = async () => {
+        chatOut.textContent = "Sending...";
+        try {
+          const data = await api("/api/v1/chat/reply", {
+            message: document.getElementById("chatMsg").value,
+            context: { productName: document.getElementById("productName").value }
+          });
+          chatOut.textContent = JSON.stringify(data, null, 2);
+        } catch (e) { chatOut.textContent = String(e); }
+      };
+
+      document.getElementById("refreshChat").onclick = async () => {
+        try { chatOut.textContent = JSON.stringify(await api("/api/v1/chat/history"), null, 2); }
+        catch (e) { chatOut.textContent = String(e); }
+      };
+
+      document.getElementById("refreshRuns").onclick = async () => {
+        try { runs.textContent = JSON.stringify(await api("/api/v1/runs"), null, 2); }
+        catch (e) { runs.textContent = String(e); }
+      };
+    </script>
+  </body>
+</html>
