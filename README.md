@@ -69,6 +69,26 @@ npm run setup:auto
 
 No-terminal shortcut on macOS: double-click `launch.command`.
 
+## Run From GitHub (Verified)
+
+This project is validated from a clean GitHub clone.
+
+Verified flow:
+
+```bash
+git clone https://github.com/smanthey/InayanBuilderBot.git
+cd InayanBuilderBot
+npm ci
+npm run lint
+npm run security:check
+npm test
+npm run setup:auto
+npm run dev:auto
+```
+
+Validation note:
+- Fresh-clone run path was re-validated on March 4, 2026.
+
 ## Configure
 
 Set in `.env`:
@@ -268,4 +288,6 @@ npm run test
 - [Installation](docs/INSTALLATION.md)
 - [Gap Analysis](docs/GAP_ANALYSIS.md)
 - [Update Notes](docs/UPDATE_NOTES.md)
+- [LinkedIn Launch Posts](docs/LINKEDIN_LAUNCH_POSTS.md)
+- [Claude Code GitHub Agent Prompt](docs/CLAUDE_CODE_GITHUB_AGENT_PROMPT.md)
 - [Security Best Practices Report](security_best_practices_report.md)
