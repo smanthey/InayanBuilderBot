@@ -64,6 +64,11 @@ Set in `.env`:
 ## Live AI Chat
 
 `/api/v1/chat/reply` is model-backed (OpenAI/DeepSeek), not rule-based.
+It is grounded in benchmark/index intelligence from:
+- latest in-app pipeline/scout/benchmark runs
+- latest OpenClaw reports when available:
+  - `scripts/reports/dashboard-chatbot-repo-scout-latest.json`
+  - `scripts/reports/repo-readiness-pulse-latest.json`
 
 Request shape:
 
