@@ -947,3 +947,106 @@ test("chat reply injects weighted validated reddit evidence into model context",
     server.close();
   }
 });
+
+test("sqlite index endpoints return stats and searchable results", async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "inayan-sqlite-index-"));
+  const dbPath = path.join(tempDir, "index.db");
+  process.env.SQLITE_INDEX_ENABLED = "1";
+  process.env.INAYAN_DB_PATH = dbPath;
+
+  const app = createApp();
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once("listening", resolve));
+
+  try {
+    const address = server.address();
+    const port = typeof address === "object" && address ? address.port : 0;
+
+    const statsRes = await fetch(`http://127.0.0.1:${port}/api/v1/index/stats`);
+    const statsBody = await statsRes.json();
+    assert.equal(statsRes.status, 200);
+    assert.equal(statsBody.ok, true);
+    assert.equal(typeof statsBody.stats.counts.repos, "number");
+    assert.equal(statsBody.stats.counts.repos > 0, true);
+
+    const searchRes = await fetch(`http://127.0.0.1:${port}/api/v1/index/search?q=dashboard&limit=5`);
+    const searchBody = await searchRes.json();
+    assert.equal(searchRes.status, 200);
+    assert.equal(searchBody.ok, true);
+    assert.equal(Array.isArray(searchBody.repos), true);
+
+    const refreshRes = await fetch(`http://127.0.0.1:${port}/api/v1/index/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source: "builtin" }),
+    });
+    const refreshBody = await refreshRes.json();
+    assert.equal(refreshRes.status, 200);
+    assert.equal(refreshBody.ok, true);
+    assert.equal(Number(refreshBody.refreshed.builtin) > 0, true);
+  } finally {
+    server.close();
+    fs.rmSync(tempDir, { recursive: true, force: true });
+    delete process.env.INAYAN_DB_PATH;
+    delete process.env.SQLITE_INDEX_ENABLED;
+  }
+});
+
+test("pipeline run persists benchmark snapshots into sqlite index", async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "inayan-sqlite-pipeline-"));
+  const dbPath = path.join(tempDir, "index.db");
+  process.env.SQLITE_INDEX_ENABLED = "1";
+  process.env.INAYAN_DB_PATH = dbPath;
+  process.env.EXTERNAL_INDEXING_MODE = "builtin";
+
+  const app = createApp();
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once("listening", resolve));
+
+  try {
+    const address = server.address();
+    const port = typeof address === "object" && address ? address.port : 0;
+
+    const runRes = await fetch(`http://127.0.0.1:${port}/api/v1/masterpiece/pipeline/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        productName: "SQLite Snapshot Product",
+        userGoal: "Persist benchmark and fusion snapshots in sqlite index",
+        stack: ["Node.js", "Express", "React"],
+        queries: ["dashboard chat"],
+        minStars: 500,
+        topK: 5,
+        runExternal: false,
+        runGithubResearch: false,
+        runRedditResearch: false,
+        seedRepos: [
+          {
+            full_name: "acme/sqlite-dashboard-chat",
+            name: "sqlite-dashboard-chat",
+            description: "dashboard chat app with proven flow",
+            stargazers_count: 2600,
+            forks_count: 250,
+            topics: ["dashboard", "chat", "react"],
+            pushed_at: new Date().toISOString(),
+          },
+        ],
+      }),
+    });
+    const runBody = await runRes.json();
+    assert.equal(runRes.status, 200);
+    assert.equal(runBody.ok, true);
+
+    const statsRes = await fetch(`http://127.0.0.1:${port}/api/v1/index/stats`);
+    const statsBody = await statsRes.json();
+    assert.equal(statsRes.status, 200);
+    assert.equal(statsBody.ok, true);
+    assert.equal(Number(statsBody.stats.counts.snapshots) > 0, true);
+    assert.equal(Number(statsBody.stats.counts.repos) > 0, true);
+  } finally {
+    server.close();
+    fs.rmSync(tempDir, { recursive: true, force: true });
+    delete process.env.INAYAN_DB_PATH;
+    delete process.env.SQLITE_INDEX_ENABLED;
+  }
+});

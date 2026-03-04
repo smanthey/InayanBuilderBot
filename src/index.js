@@ -8,6 +8,7 @@ import express from "express";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import { z } from "zod";
+import { createSqliteIndexStore } from "./sqlite-index-store.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -2527,6 +2528,10 @@ const RepoContractGapSchema = z.object({
   maxFileBytes: z.number().int().min(1024).max(5 * 1024 * 1024).default(1024 * 1024),
 });
 
+const IndexRefreshSchema = z.object({
+  source: z.enum(["builtin", "runs", "all"]).default("all"),
+});
+
 const OnboardSetupSchema = z.object({
   generateApiKey: z.boolean().default(true),
   builderbotApiKey: z.string().min(8).max(120).optional(),
@@ -2546,6 +2551,8 @@ export function createApp() {
 
   const app = express();
   const NODE_ENV = process.env.NODE_ENV || "development";
+  const SQLITE_INDEX_ENABLED = String(process.env.SQLITE_INDEX_ENABLED || "1").trim() !== "0";
+  const SQLITE_INDEX_DB_PATH = String(process.env.INAYAN_DB_PATH || path.join(dataDir, "inayan-index.db")).trim();
   const API_KEY = (process.env.BUILDERBOT_API_KEY || "").trim();
   const ALLOWED_ORIGIN = (process.env.ALLOWED_ORIGIN || "").trim();
   const RATE_LIMIT_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS || 60000);
@@ -2588,6 +2595,46 @@ export function createApp() {
     anthropicModel: ANTHROPIC_CHAT_MODEL,
     geminiModel: GEMINI_CHAT_MODEL,
   });
+  let indexStore = null;
+  try {
+    indexStore = createSqliteIndexStore({
+      dbPath: SQLITE_INDEX_DB_PATH,
+      enabled: SQLITE_INDEX_ENABLED,
+    });
+  } catch (err) {
+    indexStore = {
+      enabled: false,
+      reason: String(err?.message || err),
+    };
+  }
+
+  const getHybridCache = (cacheMap, key, source, query) => {
+    const mem = getCache(cacheMap, key);
+    if (mem) return mem;
+    if (!indexStore?.enabled) return null;
+    const dbHit = indexStore.getQueryCache({ cacheKey: key });
+    if (dbHit) {
+      setCache(cacheMap, key, dbHit);
+      return dbHit;
+    }
+    return null;
+  };
+
+  const setHybridCache = (cacheMap, key, source, query, value) => {
+    setCache(cacheMap, key, value);
+    if (!indexStore?.enabled) return;
+    try {
+      indexStore.setQueryCache({
+        cacheKey: key,
+        source,
+        query,
+        payload: value,
+        ttlSeconds: Math.ceil(MAGIC_RUN_CACHE_TTL_MS / 1000),
+      });
+    } catch {
+      // Ignore DB cache failures and keep process-level cache available.
+    }
+  };
 
   app.disable("x-powered-by");
   app.use(helmet());
@@ -2616,6 +2663,17 @@ export function createApp() {
     return next();
   };
   const openClawCaps = detectOpenClawCapabilities(CLAW_ARCHITECT_ROOT);
+  if (indexStore?.enabled) {
+    try {
+      indexStore.refreshRepos({ repos: loadBuiltinRepoIndex(), source: "builtin" });
+      indexStore.refreshFromRuns({ runs: appState.runs || [] });
+      for (const [projectKey, memory] of Object.entries(appState.projectMemory || {})) {
+        indexStore.upsertProjectMemory({ projectKey, memory });
+      }
+    } catch {
+      // Keep API available even if index warmup fails.
+    }
+  }
 
   const runOpenClawScript = async ({ scriptName, args = [], timeoutMs = 15 * 60 * 1000 }) => {
     if (!openClawCaps.rootExists) {
@@ -2797,6 +2855,52 @@ export function createApp() {
     return res.json({ ok: true, task: "dashboard_scout", params: p, result });
   });
 
+  app.post("/api/v1/index/refresh", requireAuth, (req, res) => {
+    const parsed = IndexRefreshSchema.safeParse(req.body || {});
+    if (!parsed.success) return res.status(400).json({ ok: false, error: "invalid_request", details: parsed.error.flatten() });
+    if (!indexStore?.enabled) {
+      return res.status(503).json({ ok: false, error: "index_store_unavailable", detail: indexStore?.reason || "sqlite_unavailable" });
+    }
+    const p = parsed.data;
+    const summary = {
+      source: p.source,
+      builtin: 0,
+      runs: 0,
+    };
+    try {
+      if (p.source === "builtin" || p.source === "all") {
+        const builtin = loadBuiltinRepoIndex();
+        const result = indexStore.refreshRepos({ repos: builtin, source: "builtin" });
+        summary.builtin = Number(result?.insertedOrUpdated || 0);
+      }
+      if (p.source === "runs" || p.source === "all") {
+        const result = indexStore.refreshFromRuns({ runs: appState.runs || [] });
+        summary.runs = Number(result?.insertedOrUpdated || 0);
+      }
+      return res.json({ ok: true, refreshed: summary, stats: indexStore.stats() });
+    } catch (err) {
+      return res.status(500).json({ ok: false, error: "index_refresh_failed", detail: String(err?.message || err) });
+    }
+  });
+
+  app.get("/api/v1/index/search", requireAuth, (req, res) => {
+    if (!indexStore?.enabled) {
+      return res.status(503).json({ ok: false, error: "index_store_unavailable", detail: indexStore?.reason || "sqlite_unavailable" });
+    }
+    const q = String(req.query.q || "").trim();
+    const limit = Number(req.query.limit || 20);
+    if (!q) return res.status(400).json({ ok: false, error: "invalid_request", detail: "query parameter q is required" });
+    const result = indexStore.search({ q, limit });
+    return res.json({ ok: true, query: q, ...result });
+  });
+
+  app.get("/api/v1/index/stats", requireAuth, (_req, res) => {
+    if (!indexStore?.enabled) {
+      return res.status(503).json({ ok: false, error: "index_store_unavailable", detail: indexStore?.reason || "sqlite_unavailable" });
+    }
+    return res.json({ ok: true, stats: indexStore.stats() });
+  });
+
   app.post("/api/v1/repos/contract-gap", requireAuth, (req, res) => {
     const parsed = RepoContractGapSchema.safeParse(req.body || {});
     if (!parsed.success) return res.status(400).json({ ok: false, error: "invalid_request", details: parsed.error.flatten() });
@@ -2855,6 +2959,13 @@ export function createApp() {
         output: report,
       };
       appState.runs.unshift(run);
+      if (indexStore?.enabled) {
+        indexStore.saveGithubEvidence({ query: p.query, report });
+        indexStore.refreshRepos({
+          repos: Array.isArray(report?.repo_results) ? report.repo_results : (Array.isArray(report?.repos) ? report.repos : []),
+          source: "github_research",
+        });
+      }
       trimHistory();
       persistDataStore();
 
@@ -2919,6 +3030,9 @@ export function createApp() {
         output: report,
       };
       appState.runs.unshift(run);
+      if (indexStore?.enabled) {
+        indexStore.saveRedditEvidence({ query: p.query, report });
+      }
       trimHistory();
       persistDataStore();
 
@@ -2966,6 +3080,15 @@ export function createApp() {
       output: fusion,
     };
     appState.runs.unshift(run);
+    if (indexStore?.enabled) {
+      indexStore.refreshRepos({ repos: bundle.benchmarkRepos, source: "fusion_benchmark_input" });
+      indexStore.saveSnapshots({ runId: run.id, stage: "fusion_benchmark_input", repos: bundle.benchmarkRepos });
+      indexStore.saveSnapshots({
+        runId: run.id,
+        stage: "fusion_leaderboard",
+        repos: Array.isArray(fusion?.leaderboard) ? fusion.leaderboard : [],
+      });
+    }
     trimHistory();
     persistDataStore();
 
@@ -3043,6 +3166,10 @@ export function createApp() {
     const ranked = benchmarkRepos(p.repos, p.weight_ui, p.weight_popularity);
     const run = { id: nowId("bench"), type: "benchmark", createdAt: new Date().toISOString(), payload: p, output: ranked };
     appState.runs.unshift(run);
+    if (indexStore?.enabled) {
+      indexStore.refreshRepos({ repos: ranked, source: "benchmark_endpoint" });
+      indexStore.saveSnapshots({ runId: run.id, stage: "benchmark_endpoint", repos: ranked });
+    }
     trimHistory();
     persistDataStore();
 
@@ -3260,7 +3387,7 @@ export function createApp() {
         maxResults: Number(p?.github?.maxResults || 40),
       });
       try {
-        githubReport = getCache(PIPELINE_GITHUB_CACHE, githubCacheKey);
+        githubReport = getHybridCache(PIPELINE_GITHUB_CACHE, githubCacheKey, "github_research", githubQuery);
         let cached = true;
         if (!githubReport) {
           cached = false;
@@ -3270,7 +3397,14 @@ export function createApp() {
             maxResults: Number(p?.github?.maxResults || 40),
             githubToken: GITHUB_TOKEN,
           });
-          setCache(PIPELINE_GITHUB_CACHE, githubCacheKey, githubReport);
+          setHybridCache(PIPELINE_GITHUB_CACHE, githubCacheKey, "github_research", githubQuery, githubReport);
+          if (indexStore?.enabled) {
+            indexStore.saveGithubEvidence({ query: githubQuery, report: githubReport });
+            indexStore.refreshRepos({
+              repos: Array.isArray(githubReport?.repo_results) ? githubReport.repo_results : (Array.isArray(githubReport?.repos) ? githubReport.repos : []),
+              source: "github_research",
+            });
+          }
         }
         stageResults.push({
           stage: "github_research",
@@ -3301,7 +3435,14 @@ export function createApp() {
             perPage: 12,
             maxResults: 24,
           });
-          setCache(PIPELINE_GITHUB_CACHE, fallbackKey, githubReport);
+          setHybridCache(PIPELINE_GITHUB_CACHE, fallbackKey, "github_research", fallbackQuery, githubReport);
+          if (indexStore?.enabled) {
+            indexStore.saveGithubEvidence({ query: fallbackQuery, report: githubReport });
+            indexStore.refreshRepos({
+              repos: Array.isArray(githubReport?.repo_results) ? githubReport.repo_results : (Array.isArray(githubReport?.repos) ? githubReport.repos : []),
+              source: "github_research",
+            });
+          }
           stageResults.push({
             stage: "github_research",
             ok: true,
@@ -3351,7 +3492,7 @@ export function createApp() {
         maxResults: Number(p?.reddit?.maxResults || 60),
       });
       try {
-        redditReport = getCache(PIPELINE_REDDIT_CACHE, redditCacheKey);
+        redditReport = getHybridCache(PIPELINE_REDDIT_CACHE, redditCacheKey, "reddit_research", redditQuery);
         let cached = true;
         if (!redditReport) {
           cached = false;
@@ -3365,7 +3506,10 @@ export function createApp() {
             redditAuthProfiles,
             redditRequestTimeoutMs: REDDIT_REQUEST_TIMEOUT_MS,
           });
-          setCache(PIPELINE_REDDIT_CACHE, redditCacheKey, redditReport);
+          setHybridCache(PIPELINE_REDDIT_CACHE, redditCacheKey, "reddit_research", redditQuery, redditReport);
+          if (indexStore?.enabled) {
+            indexStore.saveRedditEvidence({ query: redditQuery, report: redditReport });
+          }
         }
         stageResults.push({
           stage: "reddit_research",
@@ -3469,6 +3613,18 @@ export function createApp() {
     };
 
     appState.runs.unshift(run);
+    if (indexStore?.enabled) {
+      indexStore.refreshRepos({ repos: scoutRepos, source: "pipeline_scout" });
+      indexStore.refreshRepos({ repos: benchmarkRanked, source: "pipeline_benchmark" });
+      indexStore.saveSnapshots({ runId, stage: "pipeline_benchmark", repos: benchmarkRanked });
+      indexStore.saveSnapshots({
+        runId,
+        stage: "pipeline_fusion",
+        repos: Array.isArray(fusion?.leaderboard) ? fusion.leaderboard : [],
+      });
+      if (githubReport) indexStore.saveGithubEvidence({ query: p.userGoal, report: githubReport });
+      if (redditReport) indexStore.saveRedditEvidence({ query: p.userGoal, report: redditReport });
+    }
     trimHistory();
     persistDataStore();
 
@@ -3751,6 +3907,19 @@ export function createApp() {
       output,
     };
     appState.runs.unshift(run);
+    if (indexStore?.enabled) {
+      indexStore.refreshRepos({ repos: benchmark, source: "magic_benchmark" });
+      indexStore.refreshRepos({ repos: selectedRepos, source: "magic_selected" });
+      indexStore.saveSnapshots({ runId: run.id, stage: "magic_benchmark", repos: benchmark });
+      indexStore.saveSnapshots({
+        runId: run.id,
+        stage: "magic_fusion",
+        repos: Array.isArray(fusion?.leaderboard) ? fusion.leaderboard : [],
+      });
+      if (githubReport) indexStore.saveGithubEvidence({ query: p.userGoal, report: githubReport });
+      if (redditReport) indexStore.saveRedditEvidence({ query: p.userGoal, report: redditReport });
+      indexStore.upsertProjectMemory({ projectKey, memory: updatedMemory });
+    }
     trimHistory();
     persistDataStore();
     return res.json({ ok: true, runId: run.id, ...output });
@@ -4065,12 +4234,15 @@ export function createApp() {
 
   app.get("/health", (_req, res) => {
     const configuredCount = Object.values(providerStatus.providers).filter((p) => p.configured).length;
+    const indexStats = indexStore?.enabled ? indexStore.stats() : null;
     return res.json({
       ok: true,
       service: "inayanbuilderbot-masterpiece",
       env: NODE_ENV,
       claw_architect_root: CLAW_ARCHITECT_ROOT,
       chat_provider_count: configuredCount,
+      sqlite_index_enabled: Boolean(indexStore?.enabled),
+      sqlite_repo_count: Number(indexStats?.counts?.repos || 0),
       time: new Date().toISOString(),
     });
   });
