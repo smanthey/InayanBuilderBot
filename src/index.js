@@ -897,6 +897,8 @@ async function runGithubResearch({
       language: repo.language || null,
       topics: Array.isArray(repo.topics) ? repo.topics : [],
       uiEvidence: scored.uiEvidence,
+      breakPatternEvidence: scored.breakPatternEvidence,
+      breakPatternHits: scored.breakPatternHits,
       score: scored.score,
     };
   });
@@ -964,6 +966,31 @@ function computeUiEvidence(repo) {
   return { evidence, hits };
 }
 
+function computeBreakPatternEvidence(repo) {
+  const text = `${repo.full_name || ""} ${repo.name || ""} ${repo.description || ""} ${(repo.topics || []).join(" ")} ${(repo.signals || []).join(" ")} ${(repo.categories || []).join(" ")}`.toLowerCase();
+  const checks = [
+    ["stripe webhook", 4],
+    ["stripe-signature", 4],
+    ["x-stripe-signature", 4],
+    ["constructevent", 4],
+    ["webhook signature", 3],
+    ["signature verification", 3],
+    ["raw body", 2],
+    ["idempotency", 3],
+    ["replay attack", 2],
+    ["rollback", 1],
+  ];
+  let evidence = 0;
+  const hits = [];
+  for (const [term, weight] of checks) {
+    if (text.includes(term)) {
+      evidence += weight;
+      hits.push(term);
+    }
+  }
+  return { evidence, hits };
+}
+
 function scoreRepo(repo) {
   const stars = Number(repo.stargazers_count || repo.stars || 0);
   const forks = Number(repo.forks_count || repo.forks || 0);
@@ -971,6 +998,7 @@ function scoreRepo(repo) {
   const recencyDays = Number.isFinite(updatedAt) ? Math.max(0, (Date.now() - updatedAt) / 86400000) : 9999;
   const recencyScore = Math.max(0, 25 - Math.min(25, recencyDays / 10));
   const ui = computeUiEvidence(repo);
+  const breakPatterns = computeBreakPatternEvidence(repo);
 
   const text = `${repo.name || ""} ${repo.description || ""} ${(repo.topics || []).join(" ")}`.toLowerCase();
   const frameworkOnly = /(sdk|framework|runtime|toolkit|library|engine|starter|template)/i.test(text)
@@ -982,23 +1010,33 @@ function scoreRepo(repo) {
     Math.log10(Math.max(1, forks + 1)) * 10 +
     recencyScore +
     ui.evidence * 4 -
-    (frameworkOnly ? 22 : 0);
+    (frameworkOnly ? 22 : 0) +
+    breakPatterns.evidence * 2.2;
 
   return {
     score: Math.round(score * 100) / 100,
     uiEvidence: ui.evidence,
     uiHits: ui.hits,
+    breakPatternEvidence: breakPatterns.evidence,
+    breakPatternHits: breakPatterns.hits,
     frameworkOnly,
   };
 }
 
 function benchmarkRepos(repos, weightUi = 0.58, weightPopularity = 0.42) {
   const maxStars = Math.max(...repos.map((r) => Number(r.stars || r.stargazers_count || 0)), 1);
+  const maxBreakPatternEvidence = Math.max(...repos.map((r) => Number(r.breakPatternEvidence || 0)), 1);
   return repos
     .map((r) => {
       const uiNorm = Math.min(1, Number(r.uiEvidence || 0) / 14);
       const popNorm = Number(r.stars || r.stargazers_count || 0) / maxStars;
-      const benchmarkScore = Math.round((uiNorm * weightUi + popNorm * weightPopularity) * 10000) / 100;
+      const breakPatternNorm = Number(r.breakPatternEvidence || 0) / maxBreakPatternEvidence;
+      const breakPatternWeight = 0.16;
+      const benchmarkScore = Math.round(
+        (uiNorm * (weightUi * (1 - breakPatternWeight))
+          + popNorm * (weightPopularity * (1 - breakPatternWeight))
+          + breakPatternNorm * breakPatternWeight) * 10000
+      ) / 100;
       return { ...r, benchmarkScore };
     })
     .sort((a, b) => b.benchmarkScore - a.benchmarkScore);
@@ -1021,6 +1059,8 @@ function runBuiltinAdvancedIndexing({ repos, queries, minStars, topK }) {
       return {
         ...repo,
         indexScore: Math.round((base.score + provenanceBonus) * 100) / 100,
+        breakPatternEvidence: base.breakPatternEvidence,
+        breakPatternHits: base.breakPatternHits,
         frameworkOnly: base.frameworkOnly,
       };
     })
@@ -1242,6 +1282,7 @@ function buildFusionLeaderboard({
     const baseBenchmark = Math.max(0, Number(repo.benchmarkScore || 0));
     const indexSignal = Math.max(0, Number(repo.score || 0)) / 5;
     const uiSignal = Math.max(0, Number(repo.uiEvidence || 0)) * 1.8;
+    const breakPatternSignal = Math.min(12, Math.max(0, Number(repo.breakPatternEvidence || 0)) * 1.4);
 
     const ghRepo = ghRepoMap.get(key);
     const githubRepoBoost = ghRepo
@@ -1258,8 +1299,9 @@ function buildFusionLeaderboard({
 
     const fusionScore = roundNumber(
       baseBenchmark * 0.58
-      + indexSignal * 0.18
+      + indexSignal * 0.14
       + uiSignal * 0.1
+      + breakPatternSignal * 0.08
       + githubRepoBoost * 0.08
       + githubTermAlignment * 0.04
       + redditTermAlignment * 0.06,
@@ -1269,6 +1311,7 @@ function buildFusionLeaderboard({
     const reasons = [];
     if (baseBenchmark >= 60) reasons.push("strong benchmark score");
     if (Number(repo.uiEvidence || 0) >= 8) reasons.push("high dashboard/chat UI evidence");
+    if (Number(repo.breakPatternEvidence || 0) >= 4) reasons.push("strong webhook/security break-pattern coverage");
     if (githubRepoBoost >= 4) reasons.push("validated by GitHub repo research");
     if (githubTermAlignment >= 3) reasons.push("aligned with high-signal GitHub answer terms");
     if (redditTermAlignment >= 3) reasons.push("aligned with validated Reddit build signals");
@@ -1280,8 +1323,9 @@ function buildFusionLeaderboard({
       fusionScore,
       breakdown: {
         baseBenchmark: roundNumber(baseBenchmark * 0.58, 2),
-        indexSignal: roundNumber(indexSignal * 0.18, 2),
+        indexSignal: roundNumber(indexSignal * 0.14, 2),
         uiSignal: roundNumber(uiSignal * 0.1, 2),
+        breakPatternSignal: roundNumber(breakPatternSignal * 0.08, 2),
         githubRepoBoost: roundNumber(githubRepoBoost * 0.08, 2),
         githubTermAlignment: roundNumber(githubTermAlignment * 0.04, 2),
         redditTermAlignment: roundNumber(redditTermAlignment * 0.06, 2),
@@ -2132,9 +2176,14 @@ const ScoutSchema = z.object({
 const BenchmarkSchema = z.object({
   repos: z.array(z.object({
     full_name: z.string(),
+    name: z.string().optional(),
+    description: z.string().optional(),
     stars: z.number().optional(),
     stargazers_count: z.number().optional(),
     uiEvidence: z.number().optional(),
+    topics: z.array(z.string()).optional(),
+    breakPatternEvidence: z.number().optional(),
+    breakPatternHits: z.array(z.string()).optional(),
   })).min(1).max(30),
   weight_ui: z.number().min(0).max(1).default(0.58),
   weight_popularity: z.number().min(0).max(1).default(0.42),
@@ -2709,6 +2758,8 @@ export function createApp() {
           score: scored.score,
           uiEvidence: scored.uiEvidence,
           uiHits: scored.uiHits,
+          breakPatternEvidence: scored.breakPatternEvidence,
+          breakPatternHits: scored.breakPatternHits,
         });
       }
 
@@ -2853,6 +2904,8 @@ export function createApp() {
             score: scored.score,
             uiEvidence: scored.uiEvidence,
             uiHits: scored.uiHits,
+            breakPatternEvidence: scored.breakPatternEvidence,
+            breakPatternHits: scored.breakPatternHits,
           });
         }
         scoutRepos = [...dedup.values()].sort((a, b) => b.score - a.score).slice(0, p.topK);

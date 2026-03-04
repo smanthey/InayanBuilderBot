@@ -186,6 +186,62 @@ test("pipeline run includes builtin advanced indexing when enabled", async () =>
   server.close();
 });
 
+test("pipeline benchmark prioritizes webhook signature break-pattern evidence", async () => {
+  const app = createApp();
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once("listening", resolve));
+
+  const address = server.address();
+  const port = typeof address === "object" && address ? address.port : 0;
+
+  const seedRepos = [
+    {
+      full_name: "acme/secure-webhook-dashboard",
+      name: "secure-webhook-dashboard",
+      description: "dashboard chat app with stripe webhook signature verification, constructEvent, and idempotency",
+      stargazers_count: 1800,
+      forks_count: 180,
+      topics: ["dashboard", "chat", "webhook", "stripe-signature", "idempotency"],
+      pushed_at: new Date().toISOString(),
+    },
+    {
+      full_name: "acme/plain-dashboard-chat",
+      name: "plain-dashboard-chat",
+      description: "dashboard chat app for agent workflows",
+      stargazers_count: 1800,
+      forks_count: 180,
+      topics: ["dashboard", "chat", "workflow"],
+      pushed_at: new Date().toISOString(),
+    },
+  ];
+
+  const response = await fetch(`http://127.0.0.1:${port}/api/v1/masterpiece/pipeline/run`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      productName: "Webhook Pattern Prioritization",
+      userGoal: "Prioritize repos with proven webhook signature and idempotency patterns.",
+      stack: ["Node.js", "Express", "React"],
+      queries: ["dashboard chat webhook"],
+      minStars: 500,
+      topK: 5,
+      runExternal: false,
+      runGithubResearch: false,
+      runRedditResearch: false,
+      seedRepos,
+    }),
+  });
+
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(Array.isArray(body.benchmark), true);
+  assert.equal(body.benchmark.length >= 2, true);
+  assert.equal(body.benchmark[0].full_name, "acme/secure-webhook-dashboard");
+  assert.equal(Number(body.benchmark[0].breakPatternEvidence || 0) > Number(body.benchmark[1].breakPatternEvidence || 0), true);
+
+  server.close();
+});
+
 test("pipeline run reuses scout and benchmark cache on repeated input", async () => {
   const app = createApp();
   const server = app.listen(0);
