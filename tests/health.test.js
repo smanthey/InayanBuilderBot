@@ -74,3 +74,34 @@ test("pipeline run works with seed repos and runExternal=false", async () => {
 
   server.close();
 });
+
+test("chat endpoint returns 503 when no model keys configured", async () => {
+  delete process.env.OPENAI_API_KEY;
+  delete process.env.DEEPSEEK_API_KEY;
+  delete process.env.DEEPSEEK_KEY;
+
+  const app = createApp();
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once("listening", resolve));
+
+  const address = server.address();
+  const port = typeof address === "object" && address ? address.port : 0;
+
+  const response = await fetch(`http://127.0.0.1:${port}/api/v1/chat/reply`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Give me architecture guidance",
+      provider: "auto",
+      temperature: 0.3,
+      context: { productName: "Inaya Test Product" },
+    }),
+  });
+
+  const body = await response.json();
+  assert.equal(response.status, 503);
+  assert.equal(body.ok, false);
+  assert.equal(body.error, "chat_model_not_configured");
+
+  server.close();
+});

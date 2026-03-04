@@ -187,6 +187,131 @@ function benchmarkRepos(repos, weightUi = 0.58, weightPopularity = 0.42) {
     .sort((a, b) => b.benchmarkScore - a.benchmarkScore);
 }
 
+async function requestChatCompletion({
+  provider,
+  apiKey,
+  model,
+  messages,
+  temperature = 0.3,
+  timeoutMs = 45000,
+}) {
+  const endpoint =
+    provider === "openai"
+      ? "https://api.openai.com/v1/chat/completions"
+      : "https://api.deepseek.com/chat/completions";
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature,
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const txt = await response.text();
+      throw new Error(`${provider}_chat_failed:${response.status}:${txt.slice(0, 200)}`);
+    }
+
+    const data = await response.json();
+    const content = data?.choices?.[0]?.message?.content;
+    if (!content || typeof content !== "string") {
+      throw new Error(`${provider}_chat_empty_response`);
+    }
+    return content.trim();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function generateModelReply({
+  message,
+  context,
+  latestPipeline,
+  providerPreference,
+  modelOverride,
+  temperature,
+  openaiApiKey,
+  deepseekApiKey,
+  openaiModel,
+  deepseekModel,
+}) {
+  const topRepos = latestPipeline?.output?.blueprint?.selectedRepos || [];
+  const topRepoText = topRepos.length
+    ? topRepos.map((r) => r.full_name).slice(0, 5).join(", ")
+    : "none yet";
+
+  const systemPrompt = [
+    "You are InayanBuilderBot, a production-grade Masterpiece Agent + Chat Tool.",
+    "Dedication: built for Suro Jason Inaya.",
+    "Be concise, technical, and execution-focused.",
+    "Prioritize benchmark-first decisions, robust implementation plans, and security best practices.",
+    "Never invent secrets. Never return API keys.",
+  ].join(" ");
+
+  const userPrompt = JSON.stringify({
+    message,
+    context: context || {},
+    latest_pipeline_top_repos: topRepoText,
+    guidance_focus: [
+      "indexing strategy",
+      "repo benchmark compare",
+      "masterpiece build sequencing",
+      "security and release quality gates",
+    ],
+  });
+
+  const orderedProviders =
+    providerPreference === "openai"
+      ? ["openai", "deepseek"]
+      : providerPreference === "deepseek"
+        ? ["deepseek", "openai"]
+        : ["openai", "deepseek"];
+
+  const errors = [];
+  for (const provider of orderedProviders) {
+    try {
+      if (provider === "openai") {
+        if (!openaiApiKey) throw new Error("openai_key_missing");
+        return await requestChatCompletion({
+          provider: "openai",
+          apiKey: openaiApiKey,
+          model: modelOverride || openaiModel,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          temperature,
+        });
+      }
+      if (!deepseekApiKey) throw new Error("deepseek_key_missing");
+      return await requestChatCompletion({
+        provider: "deepseek",
+        apiKey: deepseekApiKey,
+        model: modelOverride || deepseekModel,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        temperature,
+      });
+    } catch (err) {
+      errors.push(String(err?.message || err));
+    }
+  }
+
+  throw new Error(`chat_model_unavailable:${errors.join("|").slice(0, 500)}`);
+}
+
 const ScoutSchema = z.object({
   queries: z.array(z.string().min(3)).min(1).max(10),
   perQuery: z.number().int().min(5).max(30).default(15),
@@ -238,6 +363,9 @@ const PipelineSchema = z.object({
 
 const ChatSchema = z.object({
   message: z.string().min(2).max(3000),
+  provider: z.enum(["auto", "openai", "deepseek"]).default("auto"),
+  model: z.string().min(1).max(120).optional(),
+  temperature: z.number().min(0).max(2).default(0.3),
   context: z.object({
     productName: z.string().optional(),
     stack: z.array(z.string()).optional(),
@@ -254,6 +382,10 @@ export function createApp() {
   const RATE_LIMIT_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS || 60000);
   const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX || 60);
   const GITHUB_TOKEN = (process.env.GITHUB_TOKEN || process.env.GH_TOKEN || "").trim();
+  const OPENAI_API_KEY = (process.env.OPENAI_API_KEY || "").trim();
+  const DEEPSEEK_API_KEY = (process.env.DEEPSEEK_API_KEY || process.env.DEEPSEEK_KEY || "").trim();
+  const OPENAI_CHAT_MODEL = (process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini").trim();
+  const DEEPSEEK_CHAT_MODEL = (process.env.DEEPSEEK_CHAT_MODEL || "deepseek-chat").trim();
 
   app.disable("x-powered-by");
   app.use(helmet());
@@ -531,27 +663,42 @@ export function createApp() {
     return res.json({ ok, runId, stageResults, scout: scoutRepos, benchmark: benchmarkRanked, blueprint });
   });
 
-  app.post("/api/v1/chat/reply", requireAuth, (req, res) => {
+  app.post("/api/v1/chat/reply", requireAuth, async (req, res) => {
     const parsed = ChatSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ ok: false, error: "invalid_request", details: parsed.error.flatten() });
 
-    const { message, context } = parsed.data;
-    const m = message.toLowerCase();
+    const { message, context, provider, model, temperature } = parsed.data;
+
+    if (!OPENAI_API_KEY && !DEEPSEEK_API_KEY) {
+      return res.status(503).json({
+        ok: false,
+        error: "chat_model_not_configured",
+        detail: "Set OPENAI_API_KEY and/or DEEPSEEK_API_KEY in environment.",
+      });
+    }
 
     const latestPipeline = appState.runs.find((r) => r.type === "pipeline");
-    const topRepoText = latestPipeline?.output?.blueprint?.selectedRepos?.length
-      ? `Latest top repos: ${latestPipeline.output.blueprint.selectedRepos.map((r) => r.full_name).slice(0, 3).join(", ")}.`
-      : "No pipeline run yet. Run the Masterpiece pipeline first.";
 
-    let reply = "I can help with architecture, benchmark weighting, indexing workflow, and release hardening.";
-    if (m.includes("index")) {
-      reply = `Use the full pipeline endpoint to run index sync + readiness + repo scout before build. ${topRepoText}`;
-    } else if (m.includes("benchmark")) {
-      reply = `Benchmark should prioritize UI evidence + adoption and reject framework-only repos with weak dashboard/chat evidence. ${topRepoText}`;
-    } else if (m.includes("security") || m.includes("secret")) {
-      reply = "Security baseline: API key auth, origin allowlist, rate limiting, input validation, and secret scan before each push.";
-    } else if (m.includes("build") || m.includes("masterpiece")) {
-      reply = `Masterpiece guidance: lock architecture after benchmark, then build dashboard+chat, then ship with gates. ${topRepoText}`;
+    let reply;
+    try {
+      reply = await generateModelReply({
+        message,
+        context,
+        latestPipeline,
+        providerPreference: provider,
+        modelOverride: model,
+        temperature,
+        openaiApiKey: OPENAI_API_KEY,
+        deepseekApiKey: DEEPSEEK_API_KEY,
+        openaiModel: OPENAI_CHAT_MODEL,
+        deepseekModel: DEEPSEEK_CHAT_MODEL,
+      });
+    } catch (err) {
+      return res.status(502).json({
+        ok: false,
+        error: "chat_provider_failed",
+        detail: String(err?.message || err).replace(/Bearer\\s+[A-Za-z0-9._-]+/g, "Bearer [REDACTED]"),
+      });
     }
 
     const chat = {

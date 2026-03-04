@@ -58,6 +58,32 @@ Set in `.env`:
 - `ALLOWED_ORIGIN`
 - `GITHUB_TOKEN` (recommended for GitHub API limit)
 - `CLAW_ARCHITECT_ROOT` (optional, default `/Users/tatsheen/claw-architect`)
+- `OPENAI_API_KEY` and/or `DEEPSEEK_API_KEY` (required for live AI chat)
+- `OPENAI_CHAT_MODEL` / `DEEPSEEK_CHAT_MODEL` (optional model overrides)
+
+## Live AI Chat
+
+`/api/v1/chat/reply` is model-backed (OpenAI/DeepSeek), not rule-based.
+
+Request shape:
+
+```json
+{
+  "message": "How should we tighten benchmark selection?",
+  "provider": "auto",
+  "temperature": 0.3,
+  "context": {
+    "productName": "Inaya Masterpiece Control Plane"
+  }
+}
+```
+
+`provider` options:
+- `auto` (default): tries OpenAI then DeepSeek
+- `openai`
+- `deepseek`
+
+If no provider keys are configured, endpoint returns `503 chat_model_not_configured`.
 
 ## Run
 
