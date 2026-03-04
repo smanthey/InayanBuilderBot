@@ -32,6 +32,8 @@ const appState = {
 
 const MAGIC_RUN_SCOUT_CACHE = new Map();
 const MAGIC_RUN_BENCH_CACHE = new Map();
+const PIPELINE_SCOUT_CACHE = new Map();
+const PIPELINE_BENCH_CACHE = new Map();
 const PIPELINE_GITHUB_CACHE = new Map();
 const PIPELINE_REDDIT_CACHE = new Map();
 const MAGIC_RUN_CACHE_TTL_MS = Number(process.env.MAGIC_RUN_CACHE_TTL_MS || 10 * 60 * 1000);
@@ -2808,50 +2810,75 @@ export function createApp() {
       seedRepos: p.seedRepos,
     };
 
-    let scoutRepos = [];
-    try {
-      const discovered = await discoverScoutRepos({
-        queries: p.queries,
-        perQuery: 15,
-        minStars: p.minStars,
-        topK: p.topK,
-        seedRepos: p.seedRepos,
-        githubToken: GITHUB_TOKEN,
-      });
+    const scoutCacheKey = deterministicHash({
+      stage: "pipeline_scout",
+      queries: p.queries,
+      minStars: p.minStars,
+      topK: p.topK,
+      seedRepos: Array.isArray(p.seedRepos) ? p.seedRepos.map((r) => r.full_name || r.name || "").sort() : [],
+    });
 
-      const dedup = new Map();
-      for (const repo of discovered) {
-        const key = String(repo.full_name || "").toLowerCase();
-        if (!key || dedup.has(key)) continue;
-        if (repo.archived || repo.disabled) continue;
-        const scored = scoreRepo(repo);
-        if (Number(repo.stargazers_count || repo.stars || 0) < p.minStars) continue;
-        if (scored.frameworkOnly || scored.uiEvidence < 5) continue;
-        dedup.set(key, {
-          full_name: repo.full_name,
-          name: repo.name,
-          html_url: repo.html_url,
-          description: repo.description || "",
-          stars: Number(repo.stargazers_count || repo.stars || 0),
-          forks: Number(repo.forks_count || repo.forks || 0),
-          language: repo.language || null,
-          pushed_at: repo.pushed_at || null,
-          topics: Array.isArray(repo.topics) ? repo.topics : [],
-          score: scored.score,
-          uiEvidence: scored.uiEvidence,
-          uiHits: scored.uiHits,
+    let scoutRepos = getCache(PIPELINE_SCOUT_CACHE, scoutCacheKey) || [];
+    let scoutCached = true;
+    if (!scoutRepos.length) {
+      scoutCached = false;
+      try {
+        const discovered = await discoverScoutRepos({
+          queries: p.queries,
+          perQuery: 15,
+          minStars: p.minStars,
+          topK: p.topK,
+          seedRepos: p.seedRepos,
+          githubToken: GITHUB_TOKEN,
         });
+
+        const dedup = new Map();
+        for (const repo of discovered) {
+          const key = String(repo.full_name || "").toLowerCase();
+          if (!key || dedup.has(key)) continue;
+          if (repo.archived || repo.disabled) continue;
+          const scored = scoreRepo(repo);
+          if (Number(repo.stargazers_count || repo.stars || 0) < p.minStars) continue;
+          if (scored.frameworkOnly || scored.uiEvidence < 5) continue;
+          dedup.set(key, {
+            full_name: repo.full_name,
+            name: repo.name,
+            html_url: repo.html_url,
+            description: repo.description || "",
+            stars: Number(repo.stargazers_count || repo.stars || 0),
+            forks: Number(repo.forks_count || repo.forks || 0),
+            language: repo.language || null,
+            pushed_at: repo.pushed_at || null,
+            topics: Array.isArray(repo.topics) ? repo.topics : [],
+            score: scored.score,
+            uiEvidence: scored.uiEvidence,
+            uiHits: scored.uiHits,
+          });
+        }
+        scoutRepos = [...dedup.values()].sort((a, b) => b.score - a.score).slice(0, p.topK);
+        setCache(PIPELINE_SCOUT_CACHE, scoutCacheKey, scoutRepos);
+      } catch (err) {
+        stageResults.push({ stage: "scout", ok: false, detail: { error: String(err?.message || err), payload: scoutPayload } });
       }
-      scoutRepos = [...dedup.values()].sort((a, b) => b.score - a.score).slice(0, p.topK);
-      stageResults.push({ stage: "scout", ok: true, detail: { count: scoutRepos.length, payload: scoutPayload } });
-    } catch (err) {
-      stageResults.push({ stage: "scout", ok: false, detail: { error: String(err?.message || err), payload: scoutPayload } });
+    }
+    if (scoutRepos.length > 0) {
+      stageResults.push({ stage: "scout", ok: true, detail: { count: scoutRepos.length, payload: scoutPayload, cached: scoutCached } });
     }
 
     let benchmarkRanked = [];
     if (scoutRepos.length > 0) {
-      benchmarkRanked = benchmarkRepos(scoutRepos, 0.58, 0.42);
-      stageResults.push({ stage: "benchmark", ok: true, detail: { count: benchmarkRanked.length } });
+      const benchCacheKey = deterministicHash({
+        stage: "pipeline_benchmark",
+        repos: scoutRepos.map((r) => [r.full_name, Number(r.stars || 0), Number(r.score || 0)]),
+      });
+      benchmarkRanked = getCache(PIPELINE_BENCH_CACHE, benchCacheKey) || [];
+      let benchCached = true;
+      if (!benchmarkRanked.length) {
+        benchCached = false;
+        benchmarkRanked = benchmarkRepos(scoutRepos, 0.58, 0.42);
+        setCache(PIPELINE_BENCH_CACHE, benchCacheKey, benchmarkRanked);
+      }
+      stageResults.push({ stage: "benchmark", ok: true, detail: { count: benchmarkRanked.length, cached: benchCached } });
     } else {
       stageResults.push({ stage: "benchmark", ok: false, detail: { error: "no_scout_repos" } });
     }
