@@ -2,6 +2,23 @@
 
 Date: 2026-03-04
 
+## Coordination with OpenClaw Mission Control (claw-architect)
+
+This gap analysis is kept in sync with:
+
+- **Indexing:** jCodeMunch `index_folder` on InayanBuilderBot and claw-architect (see `docs/MCP-INDEX-TARGETS.md` in claw-architect).
+- **Builder pulse:** `npm run builder:gap:pulse -- --repos InayanBuilderBot` (runs repo-completion-gap-one.js, queues autofix when needed).
+- **Benchmark lookup:** `npm run repo:benchmark:lookup -- --repo InayanBuilderBot` → `reports/repo-completion-benchmark-lookup-latest.md` with GitHub search links per section.
+- **Research:** Reddit search (`reddit:search`) and GitHub research feed `data/builtin-repo-index.json` and masterpiece/magic-run evidence.
+
+Run these from claw-architect to refresh gaps and benchmark refs; then update this doc and `docs/RESEARCH_AND_BENCHMARKS.md` as needed.
+
+## Latest run (2026-03-04): section status and next actions
+
+- **Next actions (P1):** Add tenant resolver and organization_id guardrails (capability_factory_health).
+- **Sections:** email_setup, admin_setup, auth, telnyx_sms, webhooks_signature_verify, queue_retry, observability, e2e, security_sweep = incomplete; stripe_checkout, stripe_webhooks, capability_factory_health = gap.
+- **Benchmark lookup:** See claw-architect `reports/repo-completion-benchmark-lookup-latest.md` for GitHub search links and best-case refs (e.g. local/autopay_ui, local/CaptureInbound, local/payclaw for Stripe; config/capabilities.yaml for capability factory).
+
 ## Current Strength
 
 InayanBuilderBot already ships a strong baseline for deterministic AI planning:

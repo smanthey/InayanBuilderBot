@@ -1,5 +1,29 @@
 # Update Notes
 
+## 2026-03-04 (OpenClaw indexing + builder pulse + research + benchmark sync)
+
+### Summary
+
+Aligned InayanBuilderBot with OpenClaw Mission Control (claw-architect) improvement loop: symbol indexing, builder gap pulse, Reddit/GitHub research, and repo-completion benchmark lookup.
+
+### What was run (from claw-architect)
+
+- **Indexing:** jCodeMunch `index_folder` on claw-architect and InayanBuilderBot for fast symbol search and outlines.
+- **Builder gap pulse:** `npm run builder:gap:pulse -- --repos InayanBuilderBot` (dry-run); gap analysis via `repo-completion-gap-one.js`.
+- **Benchmark lookup:** `npm run repo:benchmark:lookup -- --repo InayanBuilderBot` → GitHub search links and best-case refs per capability section.
+- **Reddit research:** `npm run reddit:search` with query "open source AI builder agent MCP deterministic" (200 posts indexed).
+
+### Doc updates
+
+- **GAP_ANALYSIS.md:** Added "Coordination with OpenClaw Mission Control" and "Latest run" section with section status, next actions (tenant resolver, organization_id guardrails), and pointer to benchmark lookup report.
+- Keeps single source of truth: run builder/benchmark from claw-architect; update this repo's docs when improving from that intel.
+
+### Coordination note
+
+Another agent may commit to the same repos. Use `git pull --rebase` before pushing; keep commits focused and notes detailed so merges stay clean.
+
+---
+
 ## 2026-03-04 (Repo-Wide Positioning and Discoverability Refresh)
 
 ### Summary
