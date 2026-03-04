@@ -19,6 +19,13 @@ Run these from claw-architect to refresh gaps and benchmark refs; then update th
 - **Sections:** email_setup, admin_setup, auth, telnyx_sms, webhooks_signature_verify, queue_retry, observability, e2e, security_sweep = incomplete; stripe_checkout, stripe_webhooks, capability_factory_health = gap.
 - **Benchmark lookup:** See claw-architect `reports/repo-completion-benchmark-lookup-latest.md` for GitHub search links and best-case refs (e.g. local/autopay_ui, local/CaptureInbound, local/payclaw for Stripe; config/capabilities.yaml for capability factory).
 
+## External completion validation (2026-03-04)
+
+- `veritap` is fully complete in capability scan (no incomplete sections, no issues).
+- `veritap_2026` reached full section completion after queue/observability/e2e/security hardening and forbidden-pattern cleanup.
+- For privacy-safe runs, use no-link mode so gap reports include queries/evidence without external URLs:
+  - `npm run repo:completion:gap -- --repo veritap_2026 --no-research-links`
+
 ## Current Strength
 
 InayanBuilderBot already ships a strong baseline for deterministic AI planning:
