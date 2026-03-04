@@ -113,6 +113,7 @@ git clone https://github.com/smanthey/InayanBuilderBot.git
 cd InayanBuilderBot
 npm ci
 npm run setup:auto
+npm run setup:index:shared
 npm run dev:auto
 ```
 
@@ -238,6 +239,7 @@ Core:
 - `SQLITE_INDEX_ENABLED` (`1` by default)
 - `INAYAN_DB_PATH` (default: `.data/inayan-index.db`)
 - `INAYAN_E2E_MOCK_MODE` (`1` only for deterministic local/CI Playwright runs)
+- `CODE_INDEX_DIR` (shared jCodeMunch index directory for all local agents)
 
 GitHub:
 - `GITHUB_TOKEN`

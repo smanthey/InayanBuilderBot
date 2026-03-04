@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import crypto from "node:crypto";
 
@@ -47,6 +48,7 @@ let envText = fs.readFileSync(envPath, "utf8");
 const env = parseEnv(envText);
 
 envText = upsertEnv(envText, "EXTERNAL_INDEXING_MODE", "builtin");
+envText = upsertEnv(envText, "CODE_INDEX_DIR", path.join(os.homedir(), ".openclaw", "shared", ".code-index"));
 
 const currentApiKey = String(env.BUILDERBOT_API_KEY || "").trim();
 if (!currentApiKey || currentApiKey === "change-me") {
@@ -63,5 +65,6 @@ if (!fs.existsSync(runsFile)) {
 
 console.log("Bootstrap complete");
 console.log("- .env ready (EXTERNAL_INDEXING_MODE=builtin)");
+console.log("- CODE_INDEX_DIR set for shared jCodeMunch index");
 console.log("- BUILDERBOT_API_KEY set");
 console.log("- .data store initialized");

@@ -27,6 +27,7 @@
   },
   "scripts": {
     "setup:auto": "node scripts/bootstrap-local.mjs",
+    "setup:index:shared": "node scripts/setup-shared-index.mjs",
     "setup:onboard": "node scripts/setup-onboard.mjs",
     "start:auto": "npm run setup:auto && node src/index.js",
     "start": "node src/index.js",
