@@ -186,6 +186,68 @@ test("pipeline run includes builtin advanced indexing when enabled", async () =>
   server.close();
 });
 
+test("pipeline run reuses scout and benchmark cache on repeated input", async () => {
+  const app = createApp();
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once("listening", resolve));
+
+  const address = server.address();
+  const port = typeof address === "object" && address ? address.port : 0;
+
+  const payload = {
+    productName: "Cache Validation Product",
+    userGoal: "Validate repeated pipeline run cache usage",
+    stack: ["Node.js", "Express", "React"],
+    queries: ["dashboard chat ui"],
+    minStars: 500,
+    topK: 5,
+    runExternal: false,
+    runGithubResearch: false,
+    runRedditResearch: false,
+    seedRepos: [
+      {
+        full_name: "acme/cache-dashboard",
+        name: "cache-dashboard",
+        description: "dashboard chat app",
+        stargazers_count: 2500,
+        forks_count: 250,
+        topics: ["dashboard", "chat", "react"],
+        pushed_at: new Date().toISOString(),
+      },
+    ],
+  };
+
+  const response1 = await fetch(`http://127.0.0.1:${port}/api/v1/masterpiece/pipeline/run`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const body1 = await response1.json();
+  assert.equal(response1.status, 200);
+  const scout1 = (body1.stageResults || []).find((s) => s.stage === "scout");
+  const bench1 = (body1.stageResults || []).find((s) => s.stage === "benchmark");
+  assert.equal(scout1?.ok, true);
+  assert.equal(bench1?.ok, true);
+  assert.equal(Boolean(scout1?.detail?.cached), false);
+  assert.equal(Boolean(bench1?.detail?.cached), false);
+
+  const response2 = await fetch(`http://127.0.0.1:${port}/api/v1/masterpiece/pipeline/run`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const body2 = await response2.json();
+  assert.equal(response2.status, 200);
+  const scout2 = (body2.stageResults || []).find((s) => s.stage === "scout");
+  const bench2 = (body2.stageResults || []).find((s) => s.stage === "benchmark");
+  assert.equal(scout2?.ok, true);
+  assert.equal(bench2?.ok, true);
+  assert.equal(Boolean(scout2?.detail?.cached), true);
+  assert.equal(Boolean(bench2?.detail?.cached), true);
+
+  server.close();
+});
+
 test("magic run includes Playwright-oriented E2E execution tasks", async () => {
   const app = createApp();
   const server = app.listen(0);
