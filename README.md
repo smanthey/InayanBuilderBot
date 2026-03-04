@@ -98,6 +98,9 @@ Real-system execution mode (`/api/v1/masterpiece/pipeline/run` with `runExternal
 - `POST /api/v1/indexing/sync`
 - `POST /api/v1/indexing/readiness`
 - `POST /api/v1/indexing/dashboard-scout`
+- `POST /api/v1/index/refresh`
+- `GET /api/v1/index/search?q=...`
+- `GET /api/v1/index/stats`
 - `GET /api/v1/setup/status`
 - `POST /api/v1/setup/onboard`
 - `GET /api/v1/runs`
@@ -231,6 +234,8 @@ Core:
 - `ALLOWED_ORIGIN`
 - `EXTERNAL_INDEXING_MODE` (`builtin` | `auto` | `openclaw`)
 - `MAGIC_RUN_MAX_BUDGET_USD` (optional cap)
+- `SQLITE_INDEX_ENABLED` (`1` by default)
+- `INAYAN_DB_PATH` (default: `.data/inayan-index.db`)
 
 GitHub:
 - `GITHUB_TOKEN`
@@ -256,6 +261,7 @@ Setup and MCP details:
 
 - Express API + middleware hardening (`helmet`, rate-limits, API key auth)
 - data persistence in `.data/` for runs, memory, and chat sessions
+- SQLite index store for repos, evidence, snapshots, query cache, and project memory (`.data/inayan-index.db`)
 - secret handling + security checks in CI
 - Docker support via `Dockerfile` and `docker-compose.yml`
 
