@@ -15,6 +15,38 @@ test("GET /health returns service metadata", async () => {
   assert.equal(response.status, 200);
   assert.equal(body.ok, true);
   assert.equal(body.service, "inayanbuilderbot-masterpiece");
+  assert.equal(typeof body.chat_provider_count, "number");
+
+  server.close();
+});
+
+test("providers endpoint exposes configured flags without secrets", async () => {
+  delete process.env.OPENAI_API_KEY;
+  delete process.env.DEEPSEEK_API_KEY;
+  delete process.env.ANTHROPIC_API_KEY;
+  delete process.env.CLAUDE_API_KEY;
+  delete process.env.GEMINI_API_KEY;
+  delete process.env.GOOGLE_API_KEY;
+  delete process.env.GOOGLE_GENAI_API_KEY;
+
+  const app = createApp();
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once("listening", resolve));
+
+  const address = server.address();
+  const port = typeof address === "object" && address ? address.port : 0;
+  const response = await fetch(`http://127.0.0.1:${port}/api/v1/chat/providers`);
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.ok, true);
+  assert.equal(body.aliases.claude, "anthropic");
+  assert.equal(body.aliases.google, "gemini");
+  assert.equal(typeof body.providers.openai.configured, "boolean");
+  assert.equal(typeof body.providers.deepseek.configured, "boolean");
+  assert.equal(typeof body.providers.anthropic.configured, "boolean");
+  assert.equal(typeof body.providers.gemini.configured, "boolean");
+  assert.equal("OPENAI_API_KEY" in body, false);
 
   server.close();
 });

@@ -100,7 +100,22 @@ open source workflow automation dashboard</textarea>
           <p class="muted">Context-aware replies using latest pipeline output.</p>
           <label>Message</label>
           <textarea id="chatMsg">Give me architecture guidance for the masterpiece build.</textarea>
+          <label>Provider</label>
+          <select id="chatProvider" style="width:100%; padding:10px; border: 1px solid var(--line); border-radius: 10px; background: #0b1220; color: var(--text);">
+            <option value="auto">auto</option>
+            <option value="openai">openai</option>
+            <option value="deepseek">deepseek</option>
+            <option value="anthropic">anthropic</option>
+            <option value="claude">claude</option>
+            <option value="gemini">gemini</option>
+            <option value="google">google</option>
+          </select>
+          <label>Model (optional)</label>
+          <input id="chatModel" placeholder="Leave blank for provider default" />
+          <label>Temperature</label>
+          <input id="chatTemperature" value="0.3" />
           <button id="sendChat">Send</button>
+          <button id="providerStatus" class="warn">Providers</button>
           <button id="refreshChat" class="alt">History</button>
           <pre id="chatOut">Chat ready.</pre>
         </section>
@@ -217,11 +232,25 @@ open source workflow automation dashboard</textarea>
       document.getElementById("sendChat").onclick = async () => {
         chatOut.textContent = "Sending...";
         try {
+          const model = document.getElementById("chatModel").value.trim();
+          const tempRaw = Number(document.getElementById("chatTemperature").value || 0.3);
+          const temperature = Number.isFinite(tempRaw) ? tempRaw : 0.3;
           const data = await api("/api/v1/chat/reply", {
             message: document.getElementById("chatMsg").value,
+            provider: document.getElementById("chatProvider").value,
+            model: model || undefined,
+            temperature,
             context: { productName: document.getElementById("productName").value }
           });
           chatOut.textContent = JSON.stringify(data, null, 2);
+        } catch (e) {
+          chatOut.textContent = String(e);
+        }
+      };
+
+      document.getElementById("providerStatus").onclick = async () => {
+        try {
+          chatOut.textContent = JSON.stringify(await api("/api/v1/chat/providers"), null, 2);
         } catch (e) {
           chatOut.textContent = String(e);
         }

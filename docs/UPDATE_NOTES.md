@@ -9,6 +9,16 @@
 - `claude` maps to `anthropic`
 - `google` maps to `gemini`
 
+### Replit-Quality UX/Operations Upgrade
+
+- Added `GET /api/v1/chat/providers` for runtime provider capability visibility.
+- Added dashboard controls for:
+  - provider selection
+  - optional model override
+  - temperature input
+  - one-click provider status view
+- Health endpoint now includes `chat_provider_count`.
+
 ### Environment Alias Support
 
 Additional environment variable aliases are now accepted:

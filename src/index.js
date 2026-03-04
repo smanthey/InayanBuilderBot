@@ -499,6 +499,30 @@ function normalizeProviderPreference(provider) {
   return "auto";
 }
 
+function buildProviderStatus({
+  openaiApiKey,
+  deepseekApiKey,
+  anthropicApiKey,
+  geminiApiKey,
+  openaiModel,
+  deepseekModel,
+  anthropicModel,
+  geminiModel,
+}) {
+  return {
+    providers: {
+      openai: { configured: Boolean(openaiApiKey), defaultModel: openaiModel },
+      deepseek: { configured: Boolean(deepseekApiKey), defaultModel: deepseekModel },
+      anthropic: { configured: Boolean(anthropicApiKey), defaultModel: anthropicModel, aliases: ["claude"] },
+      gemini: { configured: Boolean(geminiApiKey), defaultModel: geminiModel, aliases: ["google"] },
+    },
+    aliases: {
+      claude: "anthropic",
+      google: "gemini",
+    },
+  };
+}
+
 const ScoutSchema = z.object({
   queries: z.array(z.string().min(3)).min(1).max(10),
   perQuery: z.number().int().min(5).max(30).default(15),
@@ -580,6 +604,16 @@ export function createApp() {
   const DEEPSEEK_CHAT_MODEL = (process.env.DEEPSEEK_CHAT_MODEL || "deepseek-chat").trim();
   const ANTHROPIC_CHAT_MODEL = (process.env.ANTHROPIC_CHAT_MODEL || process.env.CLAUDE_CHAT_MODEL || "claude-3-5-sonnet-latest").trim();
   const GEMINI_CHAT_MODEL = (process.env.GEMINI_CHAT_MODEL || process.env.GOOGLE_CHAT_MODEL || "gemini-1.5-pro").trim();
+  const providerStatus = buildProviderStatus({
+    openaiApiKey: OPENAI_API_KEY,
+    deepseekApiKey: DEEPSEEK_API_KEY,
+    anthropicApiKey: ANTHROPIC_API_KEY,
+    geminiApiKey: GEMINI_API_KEY,
+    openaiModel: OPENAI_CHAT_MODEL,
+    deepseekModel: DEEPSEEK_CHAT_MODEL,
+    anthropicModel: ANTHROPIC_CHAT_MODEL,
+    geminiModel: GEMINI_CHAT_MODEL,
+  });
 
   app.disable("x-powered-by");
   app.use(helmet());
@@ -923,12 +957,18 @@ export function createApp() {
     return res.json({ ok: true, count: appState.runs.length, runs: appState.runs });
   });
 
+  app.get("/api/v1/chat/providers", requireAuth, (_req, res) => {
+    return res.json({ ok: true, ...providerStatus });
+  });
+
   app.get("/health", (_req, res) => {
+    const configuredCount = Object.values(providerStatus.providers).filter((p) => p.configured).length;
     return res.json({
       ok: true,
       service: "inayanbuilderbot-masterpiece",
       env: NODE_ENV,
       claw_architect_root: CLAW_ARCHITECT_ROOT,
+      chat_provider_count: configuredCount,
       time: new Date().toISOString(),
     });
   });

@@ -23,6 +23,7 @@ This is a robust, working system, not a lite demo. It includes:
 - `POST /api/v1/benchmark/run`
 - `POST /api/v1/masterpiece/build`
 - `POST /api/v1/chat/reply`
+- `GET /api/v1/chat/providers`
 - `GET /api/v1/chat/history`
 - `GET /api/v1/runs`
 - `GET /health`
@@ -101,6 +102,13 @@ Request shape:
 - `google` (alias for `gemini`)
 
 If no provider keys are configured, endpoint returns `503 chat_model_not_configured`.
+
+Provider capability endpoint:
+
+- `GET /api/v1/chat/providers`
+- Returns configured/not-configured flags and default models per provider
+- Returns alias mapping (`claude -> anthropic`, `google -> gemini`)
+- Does not expose API keys
 
 ## Run
 
