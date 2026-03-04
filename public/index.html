@@ -446,10 +446,37 @@ open source workflow automation dashboard</textarea>
               <h3>Pipeline Actions</h3>
               <div class="stack">
                 <button id="runPipeline" class="amber">Run Full Pipeline (Robust)</button>
+                <button id="runFusion" class="green">Run Fusion Leaderboard</button>
                 <button id="runScout">Scout Only</button>
                 <button id="runBenchmark" class="green">Benchmark Only</button>
                 <button id="runMasterpiece" class="ghost">Blueprint Only</button>
               </div>
+            </div>
+
+            <div class="card">
+              <h3>Onboarding Wizard</h3>
+              <div class="muted">Set API key, GitHub token, and Postgres config, then verify automatically.</div>
+              <label class="muted" style="margin-top:8px; display:block;">GitHub Token (PAT)</label>
+              <input id="onboardGithubToken" type="password" placeholder="ghp_..." />
+              <div class="pair" style="margin-top:8px;">
+                <input id="onboardPgHost" value="127.0.0.1" placeholder="POSTGRES_HOST" />
+                <input id="onboardPgPort" value="5432" placeholder="POSTGRES_PORT" />
+              </div>
+              <div class="pair" style="margin-top:8px;">
+                <input id="onboardPgUser" value="postgres" placeholder="POSTGRES_USER" />
+                <input id="onboardPgDb" value="postgres" placeholder="POSTGRES_DB" />
+              </div>
+              <label class="muted" style="margin-top:8px; display:block;">Postgres Password</label>
+              <input id="onboardPgPassword" type="password" placeholder="POSTGRES_PASSWORD" />
+              <div class="pair" style="margin-top:8px;">
+                <label class="muted"><input id="onboardGenerateKey" type="checkbox" checked /> Generate API Key</label>
+                <label class="muted"><input id="onboardRunChecks" type="checkbox" checked /> Run checks</label>
+              </div>
+              <div class="stack" style="margin-top:10px;">
+                <button id="runOnboard" class="green">Save + Verify Setup</button>
+                <button id="refreshSetup" class="ghost">Refresh Setup Status</button>
+              </div>
+              <div id="setupOut" class="log mono" style="margin-top:10px;">Setup status not loaded.</div>
             </div>
 
             <div class="card">
@@ -459,7 +486,13 @@ open source workflow automation dashboard</textarea>
                 <div class="kpi"><div class="k">Chats</div><div class="v" id="kpiChats">0</div></div>
                 <div class="kpi"><div class="k">Runs</div><div class="v" id="kpiRuns">0</div></div>
                 <div class="kpi"><div class="k">Last Provider</div><div class="v" id="kpiProvider">-</div></div>
+                <div class="kpi"><div class="k">Fusion Picks</div><div class="v" id="kpiFusion">0</div></div>
               </div>
+            </div>
+
+            <div class="card">
+              <h3>Fusion Leaderboard</h3>
+              <div id="fusion" class="log mono">Run pipeline or click "Run Fusion Leaderboard".</div>
             </div>
 
             <div class="card">
@@ -484,6 +517,8 @@ open source workflow automation dashboard</textarea>
 
       const out = document.getElementById("out");
       const runs = document.getElementById("runs");
+      const fusion = document.getElementById("fusion");
+      const setupOut = document.getElementById("setupOut");
       const sessionList = document.getElementById("sessionList");
       const chatRows = document.getElementById("chatRows");
       const chatState = document.getElementById("chatState");
@@ -546,6 +581,47 @@ open source workflow automation dashboard</textarea>
         };
       }
 
+      function collectOnboardConfig() {
+        return {
+          generateApiKey: document.getElementById("onboardGenerateKey").checked,
+          runChecks: document.getElementById("onboardRunChecks").checked,
+          githubToken: document.getElementById("onboardGithubToken").value.trim() || undefined,
+          postgres: {
+            host: document.getElementById("onboardPgHost").value.trim() || "127.0.0.1",
+            port: Number(document.getElementById("onboardPgPort").value || 5432),
+            user: document.getElementById("onboardPgUser").value.trim() || "postgres",
+            db: document.getElementById("onboardPgDb").value.trim() || "postgres",
+            password: document.getElementById("onboardPgPassword").value,
+          },
+        };
+      }
+
+      async function refreshSetupStatus() {
+        try {
+          const data = await api("/api/v1/setup/status");
+          setupOut.textContent = JSON.stringify(data, null, 2);
+        } catch (e) {
+          setupOut.textContent = `setup_status_error: ${String(e)}`;
+        }
+      }
+
+      async function runOnboardingWizard() {
+        const payload = collectOnboardConfig();
+        if (!payload.postgres.password) {
+          setupOut.textContent = "Postgres password is required to save setup.";
+          return;
+        }
+        setupOut.textContent = "Running onboarding...";
+        try {
+          const data = await api("/api/v1/setup/onboard", payload);
+          setupOut.textContent = JSON.stringify(data, null, 2);
+          document.getElementById("onboardGithubToken").value = "";
+          document.getElementById("onboardPgPassword").value = "";
+        } catch (e) {
+          setupOut.textContent = `setup_onboard_error: ${String(e)}`;
+        }
+      }
+
       async function refreshKPIs() {
         try {
           const [sessionData, historyData, runsData] = await Promise.all([
@@ -558,6 +634,9 @@ open source workflow automation dashboard</textarea>
           document.getElementById("kpiRuns").textContent = String(runsData.count || 0);
           const latest = (historyData.history || [])[0];
           document.getElementById("kpiProvider").textContent = latest?.provider || "-";
+          const latestPipeline = (runsData.runs || []).find((r) => r.type === "pipeline");
+          const fusionCount = Number(latestPipeline?.output?.fusion?.summary?.leaderboard_count || 0);
+          document.getElementById("kpiFusion").textContent = String(fusionCount);
         } catch {
           // noop
         }
@@ -760,9 +839,27 @@ open source workflow automation dashboard</textarea>
           scoutRepos = data.scout || [];
           benchmarkRepos = data.benchmark || [];
           out.textContent = JSON.stringify(data, null, 2);
+          if (data.fusion) {
+            fusion.textContent = JSON.stringify(data.fusion, null, 2);
+          }
           await refreshKPIs();
         } catch (e) {
           out.textContent = String(e);
+        }
+      };
+
+      document.getElementById("runFusion").onclick = async () => {
+        fusion.textContent = "Running fusion leaderboard...";
+        try {
+          const cfg = collectConfig();
+          const data = await api("/api/v1/research/fusion", {
+            topK: Math.max(5, Number(cfg.topK || 10)),
+            useLatestRuns: true,
+          });
+          fusion.textContent = JSON.stringify(data, null, 2);
+          await refreshKPIs();
+        } catch (e) {
+          fusion.textContent = String(e);
         }
       };
 
@@ -816,10 +913,14 @@ open source workflow automation dashboard</textarea>
         }
       };
 
+      document.getElementById("runOnboard").onclick = runOnboardingWizard;
+      document.getElementById("refreshSetup").onclick = refreshSetupStatus;
+
       // Boot
       renderMessages();
       refreshSessions();
       refreshKPIs();
+      refreshSetupStatus();
       document.getElementById("refreshRuns").click();
     </script>
   </body>

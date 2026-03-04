@@ -2,6 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
+import net from "node:net";
+import crypto from "node:crypto";
 import express from "express";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
@@ -14,6 +16,8 @@ const publicDir = path.join(rootDir, "public");
 const dataDir = path.join(rootDir, ".data");
 const runsFile = path.join(dataDir, "runs.json");
 const builtinRepoIndexFile = path.join(rootDir, "data", "builtin-repo-index.json");
+const envFile = path.join(rootDir, ".env");
+const envExampleFile = path.join(rootDir, ".env.example");
 
 const DEFAULT_PORT = Number(process.env.PORT || 3000);
 const CLAW_ARCHITECT_ROOT = process.env.CLAW_ARCHITECT_ROOT || "/Users/tatsheen/claw-architect";
@@ -246,6 +250,104 @@ function parseTrailingJson(text) {
     }
   }
   return null;
+}
+
+function parseEnvText(text) {
+  const out = {};
+  for (const line of String(text || "").split(/\r?\n/g)) {
+    if (!line || line.trim().startsWith("#")) continue;
+    const idx = line.indexOf("=");
+    if (idx <= 0) continue;
+    const key = line.slice(0, idx).trim();
+    const value = line.slice(idx + 1);
+    out[key] = value;
+  }
+  return out;
+}
+
+function readEnvFileSafe() {
+  try {
+    return fs.readFileSync(envFile, "utf8");
+  } catch {
+    return "";
+  }
+}
+
+function ensureEnvFile() {
+  if (fs.existsSync(envFile)) return;
+  if (fs.existsSync(envExampleFile)) {
+    fs.copyFileSync(envExampleFile, envFile);
+    return;
+  }
+  fs.writeFileSync(envFile, "", "utf8");
+}
+
+function upsertEnvText(text, key, value) {
+  const lines = String(text || "").split(/\r?\n/g);
+  let found = false;
+  const next = lines.map((line) => {
+    if (!line || line.trim().startsWith("#")) return line;
+    const idx = line.indexOf("=");
+    if (idx <= 0) return line;
+    const k = line.slice(0, idx).trim();
+    if (k !== key) return line;
+    found = true;
+    return `${key}=${value}`;
+  });
+  if (!found) next.push(`${key}=${value}`);
+  return `${next.join("\n").replace(/\n+$/g, "")}\n`;
+}
+
+function maskSecret(value, keepStart = 4, keepEnd = 2) {
+  const s = String(value || "");
+  if (!s) return "";
+  if (s.length <= keepStart + keepEnd) return `${"*".repeat(Math.max(0, s.length - 1))}${s.slice(-1)}`;
+  return `${s.slice(0, keepStart)}${"*".repeat(Math.max(3, s.length - keepStart - keepEnd))}${s.slice(-keepEnd)}`;
+}
+
+function parseBool(value, fallback = false) {
+  if (value == null || value === "") return fallback;
+  return ["1", "true", "yes", "on"].includes(String(value).trim().toLowerCase());
+}
+
+async function checkGithubToken(token) {
+  const t = String(token || "").trim();
+  if (!t) return { ok: false, detail: "missing_token" };
+  try {
+    const res = await fetch("https://api.github.com/rate_limit", {
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${t}`,
+        "User-Agent": "inayanbuilderbot-onboard",
+      },
+    });
+    if (!res.ok) {
+      const txt = await res.text();
+      return { ok: false, detail: `github_http_${res.status}:${txt.slice(0, 180)}` };
+    }
+    const data = await res.json();
+    const remaining = Number(data?.rate?.remaining ?? -1);
+    return { ok: true, detail: `ok_remaining_${remaining}` };
+  } catch (err) {
+    return { ok: false, detail: String(err?.message || err).slice(0, 180) };
+  }
+}
+
+async function checkPostgresTcp({ host, port, timeoutMs = 3000 }) {
+  return await new Promise((resolve) => {
+    const socket = net.createConnection({ host, port: Number(port) });
+    let done = false;
+    const close = (result) => {
+      if (done) return;
+      done = true;
+      try { socket.destroy(); } catch {}
+      resolve(result);
+    };
+    socket.setTimeout(timeoutMs);
+    socket.once("connect", () => close({ ok: true, detail: "tcp_connect_ok" }));
+    socket.once("timeout", () => close({ ok: false, detail: "tcp_timeout" }));
+    socket.once("error", (err) => close({ ok: false, detail: String(err?.message || err).slice(0, 180) }));
+  });
 }
 
 function readOpenClawScripts(clawArchitectRoot) {
@@ -700,11 +802,113 @@ function buildWeightedRedditEvidence(redditReport, maxItems = 10) {
   };
 }
 
+function buildFusionLeaderboard({
+  benchmarkRepos,
+  githubReport,
+  redditReport,
+  topK = 10,
+}) {
+  const repos = Array.isArray(benchmarkRepos) ? benchmarkRepos : [];
+  const githubRepos = Array.isArray(githubReport?.repos) ? githubReport.repos : [];
+  const githubAnswers = Array.isArray(githubReport?.answers) ? githubReport.answers : [];
+  const redditWeighted = buildWeightedRedditEvidence(redditReport, 20).weighted;
+
+  const ghRepoMap = new Map(
+    githubRepos.map((r) => [String(r.full_name || "").toLowerCase(), r]).filter(([k]) => Boolean(k))
+  );
+
+  const githubTermWeights = new Map();
+  for (const a of githubAnswers) {
+    const w = Math.max(0, Number(a.rank_score || 0)) / 100;
+    for (const t of Array.isArray(a.matched_terms) ? a.matched_terms : []) {
+      githubTermWeights.set(t, (githubTermWeights.get(t) || 0) + w);
+    }
+  }
+
+  const redditTermWeights = new Map();
+  for (const s of redditWeighted) {
+    const w = Math.max(0, Number(s.relevance_weight || 0));
+    for (const t of Array.isArray(s.matched_terms) ? s.matched_terms : []) {
+      redditTermWeights.set(t, (redditTermWeights.get(t) || 0) + w);
+    }
+  }
+
+  const leaderboard = repos.map((repo) => {
+    const key = String(repo.full_name || "").toLowerCase();
+    const text = `${repo.full_name || ""} ${repo.name || ""} ${repo.description || ""} ${(repo.topics || []).join(" ")}`.toLowerCase();
+    const tokens = [...new Set(tokenizeSearchText(text))];
+
+    const baseBenchmark = Math.max(0, Number(repo.benchmarkScore || 0));
+    const indexSignal = Math.max(0, Number(repo.score || 0)) / 5;
+    const uiSignal = Math.max(0, Number(repo.uiEvidence || 0)) * 1.8;
+
+    const ghRepo = ghRepoMap.get(key);
+    const githubRepoBoost = ghRepo
+      ? Math.min(14, Math.max(1, Number(ghRepo.score || 0) / 18))
+      : 0;
+    const githubTermAlignment = Math.min(
+      12,
+      tokens.reduce((sum, t) => sum + Number(githubTermWeights.get(t) || 0), 0)
+    );
+    const redditTermAlignment = Math.min(
+      14,
+      tokens.reduce((sum, t) => sum + Number(redditTermWeights.get(t) || 0), 0)
+    );
+
+    const fusionScore = roundNumber(
+      baseBenchmark * 0.58
+      + indexSignal * 0.18
+      + uiSignal * 0.1
+      + githubRepoBoost * 0.08
+      + githubTermAlignment * 0.04
+      + redditTermAlignment * 0.06,
+      2
+    );
+
+    const reasons = [];
+    if (baseBenchmark >= 60) reasons.push("strong benchmark score");
+    if (Number(repo.uiEvidence || 0) >= 8) reasons.push("high dashboard/chat UI evidence");
+    if (githubRepoBoost >= 4) reasons.push("validated by GitHub repo research");
+    if (githubTermAlignment >= 3) reasons.push("aligned with high-signal GitHub answer terms");
+    if (redditTermAlignment >= 3) reasons.push("aligned with validated Reddit build signals");
+    if (!reasons.length) reasons.push("solid baseline benchmark and index profile");
+
+    return {
+      full_name: repo.full_name,
+      benchmarkScore: roundNumber(baseBenchmark, 2),
+      fusionScore,
+      breakdown: {
+        baseBenchmark: roundNumber(baseBenchmark * 0.58, 2),
+        indexSignal: roundNumber(indexSignal * 0.18, 2),
+        uiSignal: roundNumber(uiSignal * 0.1, 2),
+        githubRepoBoost: roundNumber(githubRepoBoost * 0.08, 2),
+        githubTermAlignment: roundNumber(githubTermAlignment * 0.04, 2),
+        redditTermAlignment: roundNumber(redditTermAlignment * 0.06, 2),
+      },
+      reasons,
+    };
+  }).sort((a, b) => Number(b.fusionScore || 0) - Number(a.fusionScore || 0))
+    .slice(0, topK);
+
+  return {
+    generated_at: new Date().toISOString(),
+    summary: {
+      input_benchmark_count: repos.length,
+      github_repo_hits: githubRepos.length,
+      github_answer_hits: githubAnswers.length,
+      reddit_weighted_hits: redditWeighted.length,
+      leaderboard_count: leaderboard.length,
+    },
+    leaderboard,
+  };
+}
+
 function collectRepoIntelContext({ latestPipeline, allRuns, clawArchitectRoot }) {
   const latestScout = allRuns.find((r) => r.type === "scout");
   const latestBench = allRuns.find((r) => r.type === "benchmark");
   const latestReddit = allRuns.find((r) => r.type === "reddit_research");
   const latestGithubResearch = allRuns.find((r) => r.type === "github_research");
+  const latestFusion = allRuns.find((r) => r.type === "fusion_research");
   const latestRedditReport = extractLatestRedditReport({ latestPipeline, latestRedditRun: latestReddit });
   const redditWeighted = buildWeightedRedditEvidence(latestRedditReport, 10);
 
@@ -763,7 +967,34 @@ function collectRepoIntelContext({ latestPipeline, allRuns, clawArchitectRoot })
         html_url: a.html_url,
       }))
       : [],
+    fusion_top_repos: Array.isArray(latestPipeline?.output?.fusion?.leaderboard)
+      ? latestPipeline.output.fusion.leaderboard.slice(0, 8)
+      : Array.isArray(latestFusion?.output?.leaderboard)
+        ? latestFusion.output.leaderboard.slice(0, 8)
+        : [],
     external: externalIntel,
+  };
+}
+
+function getLatestResearchBundle(allRuns = []) {
+  const latestPipeline = allRuns.find((r) => r.type === "pipeline");
+  const latestBenchmark = allRuns.find((r) => r.type === "benchmark");
+  const latestGithub = allRuns.find((r) => r.type === "github_research");
+  const latestReddit = allRuns.find((r) => r.type === "reddit_research");
+
+  const benchmarkRepos = Array.isArray(latestPipeline?.output?.benchmark)
+    ? latestPipeline.output.benchmark
+    : Array.isArray(latestBenchmark?.output)
+      ? latestBenchmark.output
+      : [];
+  const githubReport = latestPipeline?.output?.github || latestGithub?.output || null;
+  const redditReport = latestPipeline?.output?.reddit || latestReddit?.output || null;
+
+  return {
+    latestPipeline,
+    benchmarkRepos,
+    githubReport,
+    redditReport,
   };
 }
 
@@ -1554,6 +1785,11 @@ const GithubResearchSchema = z.object({
   maxResults: z.number().int().min(5).max(120).default(40),
 });
 
+const FusionResearchSchema = z.object({
+  topK: z.number().int().min(3).max(30).default(10),
+  useLatestRuns: z.boolean().default(true),
+});
+
 const ChatSchema = z.object({
   message: z.string().min(2).max(3000),
   provider: z
@@ -1579,6 +1815,20 @@ const OpenClawScoutSchema = z.object({
 const OpenClawReadinessSchema = z.object({
   minScore: z.number().int().min(1).max(100).default(80),
   limit: z.number().int().min(1).max(100).default(20),
+});
+
+const OnboardSetupSchema = z.object({
+  generateApiKey: z.boolean().default(true),
+  builderbotApiKey: z.string().min(8).max(120).optional(),
+  githubToken: z.string().min(10).max(200).optional(),
+  postgres: z.object({
+    host: z.string().min(1).max(200).default("127.0.0.1"),
+    port: z.number().int().min(1).max(65535).default(5432),
+    user: z.string().min(1).max(120).default("postgres"),
+    password: z.string().min(1).max(200),
+    db: z.string().min(1).max(120).default("postgres"),
+  }).optional(),
+  runChecks: z.boolean().default(true),
 });
 
 export function createApp() {
@@ -1647,6 +1897,14 @@ export function createApp() {
   app.use(express.static(publicDir));
 
   const requireAuth = authMiddleware(API_KEY);
+  const requireSetupAuth = (req, res, next) => {
+    const key = String(process.env.BUILDERBOT_API_KEY || "").trim();
+    if (!key) return next();
+    const authHeader = String(req.headers.authorization || "");
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+    if (!token || token !== key) return res.status(401).json({ ok: false, error: "unauthorized" });
+    return next();
+  };
   const openClawCaps = detectOpenClawCapabilities(CLAW_ARCHITECT_ROOT);
 
   const runOpenClawScript = async ({ scriptName, args = [], timeoutMs = 15 * 60 * 1000 }) => {
@@ -1681,6 +1939,108 @@ export function createApp() {
       stderr_tail: String(result.stderr || "").slice(-1200),
     };
   };
+
+  const getSetupStatus = () => {
+    const envFromFile = parseEnvText(readEnvFileSafe());
+    const env = { ...envFromFile, ...process.env };
+    const githubToken = String(env.GITHUB_PERSONAL_ACCESS_TOKEN || env.GITHUB_TOKEN || "").trim();
+    const pgPass = String(env.POSTGRES_PASSWORD || env.CLAW_DB_PASSWORD || "").trim();
+    return {
+      builderbotApiKeyConfigured: Boolean(String(env.BUILDERBOT_API_KEY || "").trim()),
+      githubTokenConfigured: Boolean(githubToken),
+      postgresConfigured: Boolean(pgPass) && Boolean(String(env.POSTGRES_HOST || env.CLAW_DB_HOST || "").trim()),
+      envPath: envFile,
+      masked: {
+        githubToken: githubToken ? maskSecret(githubToken) : "",
+        postgresHost: String(env.POSTGRES_HOST || env.CLAW_DB_HOST || ""),
+        postgresPort: Number(env.POSTGRES_PORT || env.CLAW_DB_PORT || 5432),
+        postgresUser: String(env.POSTGRES_USER || env.CLAW_DB_USER || ""),
+        postgresDb: String(env.POSTGRES_DB || env.CLAW_DB_NAME || ""),
+      },
+    };
+  };
+
+  app.get("/api/v1/setup/status", requireSetupAuth, (_req, res) => {
+    return res.json({ ok: true, setup: getSetupStatus() });
+  });
+
+  app.post("/api/v1/setup/onboard", requireSetupAuth, async (req, res) => {
+    const parsed = OnboardSetupSchema.safeParse(req.body || {});
+    if (!parsed.success) return res.status(400).json({ ok: false, error: "invalid_request", details: parsed.error.flatten() });
+    const p = parsed.data;
+
+    ensureEnvFile();
+    let envText = readEnvFileSafe();
+    const changedKeys = [];
+
+    const generatedKey = p.generateApiKey
+      ? `ibb_${crypto.randomBytes(24).toString("hex")}`
+      : (p.builderbotApiKey ? String(p.builderbotApiKey).trim() : "");
+    if (generatedKey) {
+      envText = upsertEnvText(envText, "BUILDERBOT_API_KEY", generatedKey);
+      process.env.BUILDERBOT_API_KEY = generatedKey;
+      changedKeys.push("BUILDERBOT_API_KEY");
+    }
+
+    if (p.githubToken) {
+      const githubToken = String(p.githubToken).trim();
+      envText = upsertEnvText(envText, "GITHUB_TOKEN", githubToken);
+      envText = upsertEnvText(envText, "GITHUB_PERSONAL_ACCESS_TOKEN", githubToken);
+      process.env.GITHUB_TOKEN = githubToken;
+      process.env.GITHUB_PERSONAL_ACCESS_TOKEN = githubToken;
+      changedKeys.push("GITHUB_TOKEN", "GITHUB_PERSONAL_ACCESS_TOKEN");
+    }
+
+    if (p.postgres) {
+      envText = upsertEnvText(envText, "POSTGRES_HOST", String(p.postgres.host));
+      envText = upsertEnvText(envText, "POSTGRES_PORT", String(p.postgres.port));
+      envText = upsertEnvText(envText, "POSTGRES_USER", String(p.postgres.user));
+      envText = upsertEnvText(envText, "POSTGRES_PASSWORD", String(p.postgres.password));
+      envText = upsertEnvText(envText, "POSTGRES_DB", String(p.postgres.db));
+      process.env.POSTGRES_HOST = String(p.postgres.host);
+      process.env.POSTGRES_PORT = String(p.postgres.port);
+      process.env.POSTGRES_USER = String(p.postgres.user);
+      process.env.POSTGRES_PASSWORD = String(p.postgres.password);
+      process.env.POSTGRES_DB = String(p.postgres.db);
+      changedKeys.push("POSTGRES_HOST", "POSTGRES_PORT", "POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB");
+    }
+
+    fs.writeFileSync(envFile, envText, "utf8");
+
+    const checks = {};
+    if (p.runChecks) {
+      const setup = getSetupStatus();
+      checks.github = await checkGithubToken(process.env.GITHUB_PERSONAL_ACCESS_TOKEN || process.env.GITHUB_TOKEN);
+      checks.postgres = await checkPostgresTcp({
+        host: setup.masked.postgresHost || "127.0.0.1",
+        port: setup.masked.postgresPort || 5432,
+      });
+      const mcp = await runCommand({
+        cmd: "npm",
+        args: ["run", "-s", "mcp:health"],
+        cwd: rootDir,
+        timeoutMs: 120000,
+      });
+      checks.mcpHealth = {
+        ok: mcp.ok,
+        code: mcp.code,
+        timed_out: mcp.timed_out,
+        stdout_tail: String(mcp.stdout || "").slice(-800),
+        stderr_tail: String(mcp.stderr || "").slice(-800),
+      };
+    }
+
+    return res.json({
+      ok: true,
+      changedKeys: [...new Set(changedKeys)],
+      setup: getSetupStatus(),
+      generated: {
+        builderbotApiKey: generatedKey ? maskSecret(generatedKey) : "",
+      },
+      checks,
+      note: "Secrets were saved to local .env only and masked in this response.",
+    });
+  });
 
   app.get("/api/v1/indexing/capabilities", requireAuth, (_req, res) => {
     return res.json({ ok: true, indexing: { ...openClawCaps, builtinAdvancedIndexing: true } });
@@ -1841,6 +2201,50 @@ export function createApp() {
         detail: String(err?.message || err),
       });
     }
+  });
+
+  app.post("/api/v1/research/fusion", requireAuth, async (req, res) => {
+    const parsed = FusionResearchSchema.safeParse(req.body || {});
+    if (!parsed.success) return res.status(400).json({ ok: false, error: "invalid_request", details: parsed.error.flatten() });
+
+    const p = parsed.data;
+    const bundle = getLatestResearchBundle(appState.runs);
+    if (!bundle.benchmarkRepos.length) {
+      return res.status(404).json({
+        ok: false,
+        error: "fusion_inputs_missing",
+        detail: "Run /api/v1/masterpiece/pipeline/run or /api/v1/benchmark/run first.",
+      });
+    }
+
+    const fusion = buildFusionLeaderboard({
+      benchmarkRepos: bundle.benchmarkRepos,
+      githubReport: bundle.githubReport,
+      redditReport: bundle.redditReport,
+      topK: p.topK,
+    });
+
+    const run = {
+      id: nowId("fusion"),
+      type: "fusion_research",
+      createdAt: new Date().toISOString(),
+      payload: p,
+      output: fusion,
+    };
+    appState.runs.unshift(run);
+    trimHistory();
+    persistDataStore();
+
+    return res.json({
+      ok: true,
+      runId: run.id,
+      fusion,
+      sources: {
+        benchmark_count: bundle.benchmarkRepos.length,
+        has_github: Boolean(bundle.githubReport),
+        has_reddit: Boolean(bundle.redditReport),
+      },
+    });
   });
 
   app.post("/api/v1/scout/run", requireAuth, async (req, res) => {
@@ -2141,6 +2545,22 @@ export function createApp() {
       }
     }
 
+    const fusion = buildFusionLeaderboard({
+      benchmarkRepos: benchmarkRanked,
+      githubReport,
+      redditReport,
+      topK: Math.max(5, Math.min(15, p.topK)),
+    });
+    stageResults.push({
+      stage: "fusion_research",
+      ok: true,
+      detail: {
+        leaderboard_count: Number(fusion?.summary?.leaderboard_count || 0),
+        github_repo_hits: Number(fusion?.summary?.github_repo_hits || 0),
+        reddit_weighted_hits: Number(fusion?.summary?.reddit_weighted_hits || 0),
+      },
+    });
+
     const selectedRepos = benchmarkRanked.slice(0, Math.min(6, benchmarkRanked.length)).map((r) => ({
       full_name: r.full_name,
       benchmarkScore: r.benchmarkScore,
@@ -2158,8 +2578,12 @@ export function createApp() {
         github_repo_hits: Number(githubReport?.summary?.repo_hits || 0),
         github_answer_hits: Number(githubReport?.summary?.answer_hits || 0),
         reddit_indexed_posts: Number(redditReport?.summary?.indexed_posts || 0),
+        fusion_leaderboard_count: Number(fusion?.summary?.leaderboard_count || 0),
         external_stages: stageResults.filter((s) => s.stage.startsWith("external_")).length,
       },
+      fusionTop: Array.isArray(fusion?.leaderboard)
+        ? fusion.leaderboard.slice(0, 8)
+        : [],
       githubAnswerTop: Array.isArray(githubReport?.answers)
         ? githubReport.answers.slice(0, 8).map((a) => ({
           title: a.title,
@@ -2196,6 +2620,7 @@ export function createApp() {
         benchmark: benchmarkRanked,
         github: githubReport,
         reddit: redditReport,
+        fusion,
         blueprint,
       },
     };
@@ -2212,6 +2637,7 @@ export function createApp() {
       benchmark: benchmarkRanked,
       github: githubReport,
       reddit: redditReport,
+      fusion,
       blueprint,
     });
   });
