@@ -488,6 +488,20 @@
             </div>
 
             <div class="card">
+              <h3>Contract Gap Check</h3>
+              <label class="muted" style="display:block;">Repo Path</label>
+              <input id="contractRepoPath" value="/Users/tatsheen/claw-repos/autopay_ui" placeholder="/absolute/path/to/repo" />
+              <div class="pair" style="margin-top:8px;">
+                <input id="contractMaxFiles" value="5000" placeholder="max files" />
+                <input id="contractMaxFileBytes" value="1048576" placeholder="max file bytes" />
+              </div>
+              <div class="stack" style="margin-top:10px;">
+                <button id="runContractGap" class="green">Run Contract Gap Check</button>
+              </div>
+              <div id="contractGapOutput" class="log mono" style="margin-top:10px;">No contract gap report yet.</div>
+            </div>
+
+            <div class="card">
               <h3>Output</h3>
               <div id="out" class="log mono">Ready.</div>
             </div>
@@ -509,6 +523,7 @@
       const out = document.getElementById("out");
       const runs = document.getElementById("runs");
       const recompileDiff = document.getElementById("recompileDiff");
+      const contractGapOutput = document.getElementById("contractGapOutput");
       const sessionList = document.getElementById("sessionList");
       const chatRows = document.getElementById("chatRows");
       const chatState = document.getElementById("chatState");
@@ -604,6 +619,20 @@
           constraints,
           notes: notes || undefined,
         };
+      }
+
+      function renderContractGapSummary(data) {
+        const report = data?.report || {};
+        const missing = Array.isArray(report.missingBackend) ? report.missingBackend : [];
+        const aliases = Array.isArray(report.probableAliasMatches) ? report.probableAliasMatches : [];
+        const lines = [
+          `coveragePct=${Number(data?.coveragePct || 0).toFixed(2)} missingBackend=${missing.length} probableAliases=${aliases.length}`,
+          "",
+          "Fix list:",
+          ...missing.map((route) => `- Add backend route: ${route}`),
+          ...aliases.map((m) => `- Add compatibility alias: ${m.frontend} -> ${m.backendAlias}`),
+        ];
+        return lines.join("\n");
       }
 
       async function refreshSessions() {
@@ -842,6 +871,25 @@
           await refreshRunHistory();
         } catch (e) {
           recompileDiff.textContent = String(e);
+        }
+      };
+
+      document.getElementById("runContractGap").onclick = async () => {
+        const repoPath = document.getElementById("contractRepoPath").value.trim();
+        const maxFiles = Number(document.getElementById("contractMaxFiles").value || 5000);
+        const maxFileBytes = Number(document.getElementById("contractMaxFileBytes").value || 1048576);
+        if (!repoPath) {
+          contractGapOutput.textContent = "Repo path is required.";
+          return;
+        }
+        contractGapOutput.textContent = "Running contract gap check...";
+        try {
+          const data = await api("/api/v1/repos/contract-gap", { repoPath, maxFiles, maxFileBytes });
+          const summary = renderContractGapSummary(data);
+          contractGapOutput.textContent = summary;
+          out.textContent = JSON.stringify(data, null, 2);
+        } catch (e) {
+          contractGapOutput.textContent = String(e);
         }
       };
 
