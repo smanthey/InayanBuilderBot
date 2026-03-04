@@ -4,6 +4,9 @@
 
 Dedicated to **Suro Jason Inaya**. Built for him personally.
 
+[![CI](https://github.com/smanthey/InayanBuilderBot/actions/workflows/ci.yml/badge.svg)](https://github.com/smanthey/InayanBuilderBot/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
+
 ## Complete Product Scope
 
 This is a robust, working system, not a lite demo. It includes:
@@ -286,8 +289,12 @@ npm run test
 - [Architecture](docs/ARCHITECTURE.md)
 - [Security](docs/SECURITY.md)
 - [Installation](docs/INSTALLATION.md)
+- [Roadmap](docs/ROADMAP.md)
 - [Gap Analysis](docs/GAP_ANALYSIS.md)
 - [Update Notes](docs/UPDATE_NOTES.md)
+- [Contributing](CONTRIBUTING.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [License](LICENSE)
 - [LinkedIn Launch Posts](docs/LINKEDIN_LAUNCH_POSTS.md)
 - [Claude Code GitHub Agent Prompt](docs/CLAUDE_CODE_GITHUB_AGENT_PROMPT.md)
 - [Security Best Practices Report](security_best_practices_report.md)
