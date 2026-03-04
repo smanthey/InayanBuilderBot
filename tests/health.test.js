@@ -399,6 +399,66 @@ test("github research endpoint returns repo and answer intelligence", async () =
   }
 });
 
+test("github research endpoint returns partial results when issue search fails", async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async (url, options = {}) => {
+    const target = String(url || "");
+    if (target.includes("/search/repositories")) {
+      return new Response(
+        JSON.stringify({
+          items: [
+            {
+              full_name: "acme/partial-research",
+              html_url: "https://github.com/acme/partial-research",
+              description: "A".repeat(1200),
+              stargazers_count: 1200,
+              forks_count: 100,
+              language: "TypeScript",
+              topics: ["dashboard", "chat"],
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (target.includes("/search/issues")) {
+      return new Response(JSON.stringify({ message: "rate limit" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return originalFetch(url, options);
+  };
+
+  const app = createApp();
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once("listening", resolve));
+  try {
+    const address = server.address();
+    const port = typeof address === "object" && address ? address.port : 0;
+    const response = await originalFetch(`http://127.0.0.1:${port}/api/v1/github/research`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query: "dashboard chat",
+        perPage: 10,
+        maxResults: 10,
+      }),
+    });
+    const body = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, true);
+    assert.equal(Number(body.summary.repo_hits), 1);
+    assert.equal(Number(body.summary.answer_hits), 0);
+    assert.equal(Array.isArray(body.summary.source_errors), true);
+    assert.equal(body.summary.source_errors.length, 1);
+    assert.equal(String(body.repos[0].description).length <= 360, true);
+  } finally {
+    global.fetch = originalFetch;
+    server.close();
+  }
+});
+
 test("pipeline includes github_research stage", async () => {
   const originalFetch = global.fetch;
   global.fetch = async (url, options = {}) => {

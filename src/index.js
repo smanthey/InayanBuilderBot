@@ -335,6 +335,10 @@ function extractCodeSnippetsFromMarkdown(markdown, maxSnippets = 2, maxChars = 4
   return blocks;
 }
 
+function clipText(value, max = 300) {
+  return String(value || "").replace(/\s+/g, " ").trim().slice(0, max);
+}
+
 function scoreGithubAnswer(item, queryTokens = []) {
   const title = String(item?.title || "");
   const body = String(item?.body || "");
@@ -361,17 +365,30 @@ async function runGithubResearch({
   githubToken,
 }) {
   const queryTokens = [...new Set(tokenizeSearchText(query))].slice(0, 24);
-  const [repos, issues] = await Promise.all([
+  const [reposResult, issuesResult] = await Promise.allSettled([
     githubSearch({ query, perPage, githubToken }),
     githubIssueSearch({ query, perPage, githubToken }),
   ]);
+
+  const repos = reposResult.status === "fulfilled" ? reposResult.value : [];
+  const issues = issuesResult.status === "fulfilled" ? issuesResult.value : [];
+  const sourceErrors = [];
+  if (reposResult.status === "rejected") {
+    sourceErrors.push({ source: "repo_search", error: String(reposResult.reason?.message || reposResult.reason || "repo_search_failed") });
+  }
+  if (issuesResult.status === "rejected") {
+    sourceErrors.push({ source: "issue_search", error: String(issuesResult.reason?.message || issuesResult.reason || "issue_search_failed") });
+  }
+  if (!repos.length && !issues.length) {
+    throw new Error(`github_research_unavailable:${sourceErrors.map((e) => e.error).join("|").slice(0, 500)}`);
+  }
 
   const repoResults = repos.slice(0, maxResults).map((repo) => {
     const scored = scoreRepo(repo);
     return {
       full_name: repo.full_name,
       html_url: repo.html_url,
-      description: repo.description || "",
+      description: clipText(repo.description || "", 360),
       stars: Number(repo.stargazers_count || 0),
       forks: Number(repo.forks_count || 0),
       language: repo.language || null,
@@ -385,7 +402,7 @@ async function runGithubResearch({
     .map((it) => {
       const s = scoreGithubAnswer(it, queryTokens);
       return {
-        title: it.title || "",
+        title: clipText(it.title || "", 220),
         html_url: it.html_url || "",
         repository_url: it.repository_url || "",
         comments: Number(it.comments || 0),
@@ -405,6 +422,7 @@ async function runGithubResearch({
       repo_hits: repoResults.length,
       answer_hits: answerRows.length,
       top_terms: queryTokens,
+      source_errors: sourceErrors,
       github_token_configured: Boolean(githubToken),
     },
     repos: repoResults,
