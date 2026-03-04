@@ -1304,6 +1304,53 @@ function tokenizeQueries(queries = []) {
   return [...new Set(tokens)];
 }
 
+function buildIntentQueryTokens({ productName, userGoal, queries }) {
+  const raw = tokenizeQueries([
+    String(productName || ""),
+    String(userGoal || ""),
+    ...(Array.isArray(queries) ? queries : []),
+  ]);
+  const generic = new Set([
+    "open",
+    "source",
+    "best",
+    "build",
+    "builder",
+    "project",
+    "workflow",
+    "workflows",
+    "platform",
+    "dashboard",
+    "chat",
+    "agent",
+    "agents",
+  ]);
+  return raw.filter((t) => !generic.has(t));
+}
+
+function buildScopedGithubQuery(input, maxLen = 220) {
+  const focused = buildIntentQueryTokens(input);
+  if (focused.length) return focused.slice(0, 24).join(" ").slice(0, maxLen);
+  return String(`${input?.productName || ""} ${input?.userGoal || ""}`).trim().slice(0, maxLen);
+}
+
+function selectIntentSubreddits(input, defaults = []) {
+  const hay = `${input?.productName || ""} ${input?.userGoal || ""} ${(input?.queries || []).join(" ")}`.toLowerCase();
+  const isMarketingAutomation =
+    /manychat|instagram|comment|dm|broadcast|campaign|chatbot|automation/.test(hay);
+  if (!isMarketingAutomation) return defaults;
+  const intentSubs = [
+    "marketing",
+    "socialmedia",
+    "InstagramMarketing",
+    "Entrepreneur",
+    "smallbusiness",
+    "webdev",
+    "programming",
+  ];
+  return [...new Set(intentSubs)];
+}
+
 function loadBuiltinRepoIndex() {
   const payload = readJsonSafe(builtinRepoIndexFile);
   return Array.isArray(payload?.repos) ? payload.repos : [];
@@ -3200,8 +3247,12 @@ export function createApp() {
     if (p.runGithubResearch) {
       const githubQuery = String(
         p?.github?.query
-        || `${p.productName} ${p.userGoal} ${p.queries.join(" ")}`
-      ).slice(0, 300);
+        || buildScopedGithubQuery({
+          productName: p.productName,
+          userGoal: p.userGoal,
+          queries: p.queries,
+        }, 220)
+      ).slice(0, 220);
       const githubCacheKey = deterministicHash({
         stage: "github_research",
         githubQuery,
@@ -3233,7 +3284,11 @@ export function createApp() {
         });
       } catch (err) {
         try {
-          const fallbackQuery = String(p.queries?.[0] || p.productName || "ai builder").slice(0, 120);
+          const fallbackQuery = buildScopedGithubQuery({
+            productName: p.productName,
+            userGoal: p.userGoal,
+            queries: [String(p.queries?.[0] || p.productName || "ai builder")],
+          }, 120);
           githubReport = await runGithubResearch({
             query: fallbackQuery,
             perPage: 12,
@@ -3274,11 +3329,19 @@ export function createApp() {
     if (p.runRedditResearch) {
       const redditQuery = String(
         p?.reddit?.query
-        || `${p.productName} ${p.userGoal} ${p.queries.join(" ")} dashboard chat ui`
-      ).slice(0, 300);
+        || buildScopedGithubQuery({
+          productName: p.productName,
+          userGoal: p.userGoal,
+          queries: [...(Array.isArray(p.queries) ? p.queries : []), "dashboard", "chat", "ui"],
+        }, 220)
+      ).slice(0, 220);
       const redditSubreddits = Array.isArray(p?.reddit?.subreddits) && p.reddit.subreddits.length
         ? p.reddit.subreddits
-        : REDDIT_DEFAULT_SUBREDDITS;
+        : selectIntentSubreddits({
+          productName: p.productName,
+          userGoal: p.userGoal,
+          queries: p.queries,
+        }, REDDIT_DEFAULT_SUBREDDITS);
       const redditCacheKey = deterministicHash({
         stage: "reddit_research",
         redditQuery,
@@ -3503,9 +3566,14 @@ export function createApp() {
 
     let githubReport = null;
     let redditReport = null;
+    const magicInput = {
+      productName: p.productName,
+      userGoal: p.userGoal,
+      queries,
+    };
     try {
       githubReport = await runGithubResearch({
-        query: `${p.productName} ${p.userGoal}`.slice(0, 260),
+        query: buildScopedGithubQuery(magicInput, 220),
         perPage: 20,
         maxResults: timeoutTierConfig.maxResults,
         githubToken: GITHUB_TOKEN,
@@ -3515,8 +3583,11 @@ export function createApp() {
     }
     try {
       redditReport = await runRedditResearch({
-        query: `${p.productName} ${p.userGoal} builder workflow`.slice(0, 260),
-        subreddits: REDDIT_DEFAULT_SUBREDDITS,
+        query: buildScopedGithubQuery({
+          ...magicInput,
+          queries: [...queries, "builder", "workflow"],
+        }, 220),
+        subreddits: selectIntentSubreddits(magicInput, REDDIT_DEFAULT_SUBREDDITS),
         limitPerSubreddit: timeoutTierConfig.redditLimit,
         timeWindow: "year",
         maxResults: timeoutTierConfig.maxResults,
