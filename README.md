@@ -49,6 +49,11 @@ Primary output fields:
 - `evaluation`
 - `markdownPlan`
 
+Execution output now includes Playwright-focused E2E planning artifacts by default:
+- `tests/e2e/magic-run.spec.ts`
+- `tests/e2e/deploy-targets.spec.ts`
+- `playwright.config.ts`
+
 Related endpoints:
 - `POST /api/v1/masterpiece/recompile`
 - `GET /api/v1/masterpiece/magic-run/demo`
