@@ -331,8 +331,13 @@ See:
 - [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
 - [`docs/SECURITY.md`](./docs/SECURITY.md)
 
+## Pipeline: Video → index → brief → research → benchmark → InayanBuilderBot
+
+Repeatable flow from tutorial videos and research to a shippable builder: add YouTube URLs to claw-architect, run `youtube:index:auto` and `youtube:index:to-brief`, then Reddit/search and `repo:completion:gap --repo InayanBuilderBot`; run `inayan:full-cycle --until-repo InayanBuilderBot` until no gaps. See [`docs/RUNBOOK.md`](./docs/RUNBOOK.md).
+
 ## Documentation Index
 
+- [`docs/RUNBOOK.md`](./docs/RUNBOOK.md) — Mission Control integration, env contract, pipeline.
 - [`docs/UPDATE_NOTES.md`](./docs/UPDATE_NOTES.md)
 - [`docs/RESEARCH_AND_BENCHMARKS.md`](./docs/RESEARCH_AND_BENCHMARKS.md)
 - [`docs/GAP_ANALYSIS.md`](./docs/GAP_ANALYSIS.md)
